@@ -34,6 +34,9 @@ pub enum TokenKind {
     GreaterEqual,
     Less,
     LessEqual,
+
+    Empty,
+    Eof,
 }
 
 impl Token {
