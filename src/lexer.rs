@@ -4,13 +4,13 @@ use std::iter::Peekable;
 use std::str::Chars;
 
 #[derive(Debug)]
-struct Lexer<'src> {
+pub struct Lexer<'src> {
     it: Peekable<Chars<'src>>,
-    token: Token,
+    pub token: Token,
 }
 
 impl<'src> Lexer<'src> {
-    fn new(text: &'src str) -> Lexer {
+    pub fn new(text: &'src str) -> Lexer {
         Lexer {
             it: text.chars().peekable(),
             token: Token::new(TokenKind::Empty, 0),
@@ -42,13 +42,68 @@ impl<'src> Lexer<'src> {
                 num *= 10f64;
                 num += c.to_digit(10).unwrap() as f64;
             } else {
-                return Token::new(TokenKind::NumberLiteral(num), len);
+                return Token::number(num, len);
             }
             self.next();
         }
     }
 
-    fn advance(&mut self) {
+    fn scan_ident(&mut self) -> Token {
+        assert!(start_ident(self.peek()));
+        let mut ident = String::new();
+        let mut len = 0usize;
+        loop {
+            let c = self.peek();
+            if !mid_ident(c) {
+                return Token::ident(ident, len);
+            }
+            self.next();
+            len += 1;
+            ident.push(c);
+        }
+    }
+
+    fn scan_str(&mut self) -> Token {
+        assert_eq!(self.peek(), '"');
+        let mut string = String::new();
+        self.next();
+        let mut len = 1usize;
+        loop {
+            let c = self.peek();
+            if c == '"' {
+                self.next();
+                len += 1;
+                return Token::string(string, len);
+            }
+            self.next();
+            len += 1;
+            match c {
+                '\\' => match self.peek() {
+                    '"' => {
+                        string.push('"');
+                        self.next();
+                        len += 1;
+                    }
+                    '\\' => {
+                        string.push('\\');
+                        self.next();
+                        len += 1;
+                    }
+                    'n' => {
+                        string.push('\n');
+                        self.next();
+                        len += 1;
+                    }
+                    _ => {}
+                },
+                _ => {
+                    string.push(c);
+                }
+            };
+        }
+    }
+
+    pub fn advance(&mut self) {
         macro_rules! token_1 {
             ($kind:ident) => {{
                 self.next();
@@ -78,20 +133,54 @@ impl<'src> Lexer<'src> {
                 self.next();
                 continue;
             }
+            if start_ident(c) {
+                self.token = self.scan_ident();
+                return;
+            }
+            if c == '/' {
+                self.next();
+                if self.peek() == '/' {
+                    while self.peek() != '\n' {
+                        self.next();
+                    }
+                    continue;
+                }
+                return token_1!(Slash);
+            }
             return match c {
                 '0'..='9' => {
                     self.token = self.scan_number();
+                }
+                '"' => {
+                    self.token = self.scan_str();
                 }
                 '(' => token_1!(LParen),
                 ')' => token_1!(RParen),
                 '{' => token_1!(LBrace),
                 '}' => token_1!(RBrace),
+                ',' => token_1!(Comma),
+                '.' => token_1!(Dot),
+                '-' => token_1!(Minus),
+                '+' => token_1!(Plus),
+                '*' => token_1!(Star),
+                '/' => token_1!(Slash),
+                ';' => token_1!(Semi),
                 '<' => token_1_2!(Less, '=', LessEqual),
                 '>' => token_1_2!(Greater, '=', GreaterEqual),
+                '!' => token_1_2!(Bang, '=', BangEqual),
+                '=' => token_1_2!(Equal, '=', EqualEqual),
                 _ => unimplemented!(),
             };
         }
     }
+}
+
+fn start_ident(c: char) -> bool {
+    c.is_ascii_alphabetic() || c == '$' || c == '_'
+}
+
+fn mid_ident(c: char) -> bool {
+    start_ident(c) || c.is_digit(10)
 }
 
 #[cfg(test)]
@@ -108,7 +197,8 @@ mod tests {
     fn smoke() {
         let src: &'static str = "1 { } ( ) > >= < <=";
         let mut lex = Lexer::new(src);
-        assert_eq!(NumberLiteral(1f64), advance(&mut lex).kind);
+        assert_eq!(NumberLiteral, advance(&mut lex).kind);
+        assert_eq!(Some(1f64), lex.token.number);
         assert_eq!(LBrace, advance(&mut lex).kind);
         assert_eq!(RBrace, advance(&mut lex).kind);
         assert_eq!(LParen, advance(&mut lex).kind);

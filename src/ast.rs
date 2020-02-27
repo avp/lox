@@ -1,30 +1,53 @@
-struct File {
-    decls: LinkedList<Box<Decl>>,
+#[derive(Debug)]
+pub struct File {
+    pub decls: Vec<Box<Decl>>,
 }
 
-enum DeclKind {
-    Stmt,
+#[derive(Debug)]
+pub enum DeclKind {
+    Stmt(Box<Stmt>),
 }
 
-struct Decl {
-    kind: DeclKind,
+#[derive(Debug)]
+pub struct Decl {
+    pub kind: DeclKind,
 }
 
-enum StmtKind {
-    Expr,
+#[derive(Debug)]
+pub enum StmtKind {
+    Expr(Box<Expr>),
 }
 
-struct Stmt {
-    kind: StmtKind,
+#[derive(Debug)]
+pub struct Stmt {
+    pub kind: StmtKind,
 }
 
-enum ExprKind {
+#[derive(Debug)]
+pub enum BinOpKind {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+#[derive(Debug)]
+pub enum UnOpKind {
+    Neg,
+    Not,
+}
+
+#[derive(Debug)]
+pub enum ExprKind {
     BinOp(BinOpKind, Box<Expr>, Box<Expr>),
+    UnOp(UnOpKind, Box<Expr>),
     NumberLiteral(f64),
     StringLiteral(String),
     BoolLiteral(bool),
+    Ident(String),
 }
 
-struct Expr {
-    kind: ExprKind,
+#[derive(Debug)]
+pub struct Expr {
+    pub kind: ExprKind,
 }
