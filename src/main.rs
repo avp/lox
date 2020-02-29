@@ -7,6 +7,8 @@ mod token;
 mod ast;
 mod parser;
 
+mod vm;
+
 use clap::Clap;
 use std::fs::File;
 use std::io::Read;
@@ -44,21 +46,14 @@ fn main() -> Result<(), failure::Error> {
 
     let ast = parser::Parser::parse(&files, file_id);
     match ast {
-        Err(parser::ParseError::Diag(d)) => {
-            let writer =
-                codespan_reporting::term::termcolor::StandardStream::stderr(
-                    codespan_reporting::term::termcolor::ColorChoice::Auto,
-                );
-            let config = codespan_reporting::term::Config::default();
-            codespan_reporting::term::emit(
-                &mut writer.lock(),
-                &config,
-                &files,
-                &d,
-            ).unwrap();
+        Err(err) => {
+            err.emit(&files);
+            return Err(err.into());
         }
         _ => {
-            println!("{:#?}", &ast);
+            if opt.dump_ast {
+                println!("{:#?}", &ast);
+            }
         }
     };
 

@@ -13,9 +13,19 @@ pub struct Parser<'src> {
 pub type Result<T> = std::result::Result<T, ParseError>;
 
 #[derive(Debug, Fail)]
-pub enum ParseError {
-    #[fail(display = "Unexpected token")]
-    Diag(Diagnostic),
+#[fail(display = "Compilation failed")]
+pub struct ParseError(Diagnostic);
+
+impl ParseError {
+    pub fn emit(&self, files: &codespan::Files<&str>) {
+        use codespan_reporting::term;
+        let d = &self.0;
+        let writer = term::termcolor::StandardStream::stderr(
+            term::termcolor::ColorChoice::Auto,
+        );
+        let config = term::Config::default();
+        term::emit(&mut writer.lock(), &config, files, &d).unwrap();
+    }
 }
 
 impl<'src> Parser<'src> {
@@ -32,14 +42,14 @@ impl<'src> Parser<'src> {
     }
 
     fn unexpected(&self) -> ParseError {
-        ParseError::Diag(Diagnostic::new_error(
+        ParseError(Diagnostic::new_error(
             format!("Unexpected '{}'", self.lexer.token.kind),
             Label::new(self.file_id, self.lexer.token.span, ""),
         ))
     }
 
     fn expected(&self, kind: TokenKind) -> ParseError {
-        ParseError::Diag(Diagnostic::new_error(
+        ParseError(Diagnostic::new_error(
             format!(
                 "Expected '{}' but found '{}'",
                 kind, self.lexer.token.kind

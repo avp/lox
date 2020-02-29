@@ -7,6 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+libc = "0.2.2"
 clap = { git = "https://github.com/clap-rs/clap/" }
 failure = "0.1.6"
 codespan = "0.8.0"
