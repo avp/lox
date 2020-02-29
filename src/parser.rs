@@ -180,6 +180,8 @@ impl<'src> Parser<'src> {
             TokenKind::Ident => {
                 ExprKind::Ident(self.lexer.token.string.clone().unwrap())
             }
+            TokenKind::ResWord(ResWord::True) => ExprKind::BoolLiteral(true),
+            TokenKind::ResWord(ResWord::False) => ExprKind::BoolLiteral(false),
             TokenKind::NumberLiteral => {
                 ExprKind::NumberLiteral(self.lexer.token.number.unwrap())
             }
