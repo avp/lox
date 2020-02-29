@@ -17,7 +17,7 @@ pub type Result<T> = std::result::Result<T, ParseError>;
 pub struct ParseError(Diagnostic);
 
 impl ParseError {
-    pub fn emit(&self, files: &codespan::Files<&str>) {
+    pub fn emit<T: AsRef<str>>(&self, files: &codespan::Files<T>) {
         use codespan_reporting::term;
         let d = &self.0;
         let writer = term::termcolor::StandardStream::stderr(
