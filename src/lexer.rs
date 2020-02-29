@@ -1,64 +1,70 @@
 use crate::token::{Token, TokenKind};
 
+use codespan::{ByteIndex, Span};
 use std::iter::Peekable;
-use std::str::Chars;
+use std::str::CharIndices;
 
 #[derive(Debug)]
 pub struct Lexer<'src> {
-    it: Peekable<Chars<'src>>,
+    it: Peekable<CharIndices<'src>>,
     pub token: Token,
 }
 
 impl<'src> Lexer<'src> {
     pub fn new(text: &'src str) -> Lexer {
         Lexer {
-            it: text.chars().peekable(),
-            token: Token::new(TokenKind::Empty, 0),
+            it: text.char_indices().peekable(),
+            token: Token::new(TokenKind::Empty, Span::initial()),
         }
     }
 
-    fn next(&mut self) -> char {
+    fn next(&mut self) -> (ByteIndex, char) {
         match self.it.next() {
-            Some(c) => c,
-            None => '\0',
+            Some((pos, c)) => (ByteIndex::from(pos as u32), c),
+            None => (ByteIndex::from(0u32), '\0'),
         }
     }
 
     fn peek(&mut self) -> char {
         match self.it.peek() {
-            Some(&c) => c,
+            Some(&(_, c)) => c,
             None => '\0',
         }
     }
 
     fn scan_number(&mut self) -> Token {
         assert!(self.peek().is_digit(10));
-        let mut len = 0;
-        let mut num = self.next().to_digit(10).unwrap() as f64;
+        let (start, c) = self.next();
+        let mut end = start;
+        let mut num = c.to_digit(10).unwrap() as f64;
         loop {
             let c = self.peek();
             if c.is_digit(10) {
-                len += 1;
                 num *= 10f64;
                 num += c.to_digit(10).unwrap() as f64;
             } else {
-                return Token::number(num, len);
+                return Token::number(num, Span::new(start, end));
             }
-            self.next();
+            end = self.next().0;
         }
     }
 
     fn scan_ident(&mut self) -> Token {
         assert!(start_ident(self.peek()));
         let mut ident = String::new();
-        let mut len = 0usize;
+        let (start, c) = self.next();
+        ident.push(c);
+        let mut end = start;
         loop {
             let c = self.peek();
             if !mid_ident(c) {
-                return Token::ident(ident, len);
+                let span = Span::new(start, end);
+                return match Token::res_word(&ident, span) {
+                    None => Token::ident(ident, span),
+                    Some(t) => t,
+                };
             }
-            self.next();
-            len += 1;
+            end = self.next().0;
             ident.push(c);
         }
     }
@@ -66,33 +72,27 @@ impl<'src> Lexer<'src> {
     fn scan_str(&mut self) -> Token {
         assert_eq!(self.peek(), '"');
         let mut string = String::new();
-        self.next();
-        let mut len = 1usize;
+        let (start, _) = self.next();
         loop {
             let c = self.peek();
             if c == '"' {
-                self.next();
-                len += 1;
-                return Token::string(string, len);
+                let (end, _) = self.next();
+                return Token::string(string, Span::new(start, end));
             }
             self.next();
-            len += 1;
             match c {
                 '\\' => match self.peek() {
                     '"' => {
                         string.push('"');
                         self.next();
-                        len += 1;
                     }
                     '\\' => {
                         string.push('\\');
                         self.next();
-                        len += 1;
                     }
                     'n' => {
                         string.push('\n');
                         self.next();
-                        len += 1;
                     }
                     _ => {}
                 },
@@ -105,20 +105,20 @@ impl<'src> Lexer<'src> {
 
     pub fn advance(&mut self) {
         macro_rules! token_1 {
-            ($kind:ident) => {{
-                self.next();
-                self.token = Token::new(TokenKind::$kind, 1);
+            ($k:ident) => {{
+                let (start, _) = self.next();
+                self.token = Token::new(TokenKind::$k, Span::new(start, start));
             }};
         }
 
         macro_rules! token_1_2 {
             ($kind1:ident, $next:expr, $kind2:ident) => {{
-                self.next();
+                let (start, _) = self.next();
                 self.token = if self.peek() == $next {
-                    self.next();
-                    Token::new(TokenKind::$kind2, 2)
+                    let (end, _) = self.next();
+                    Token::new(TokenKind::$kind2, Span::new(start, end))
                 } else {
-                    Token::new(TokenKind::$kind1, 1)
+                    Token::new(TokenKind::$kind1, Span::new(start, start))
                 }
             }};
         }
@@ -126,7 +126,7 @@ impl<'src> Lexer<'src> {
         loop {
             let c = self.peek();
             if c == '\0' {
-                self.token = Token::new(TokenKind::Eof, 0);
+                self.token = Token::new(TokenKind::Eof, Span::initial());
                 return;
             }
             if c.is_whitespace() {
@@ -185,8 +185,9 @@ fn mid_ident(c: char) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::TokenKind::*;
     use super::*;
+    use crate::token::ResWord::*;
+    use crate::token::TokenKind::*;
 
     fn advance<'src, 'b>(lexer: &'src mut Lexer) -> &'src Token {
         lexer.advance();
@@ -207,5 +208,13 @@ mod tests {
         assert_eq!(GreaterEqual, advance(&mut lex).kind);
         assert_eq!(Less, advance(&mut lex).kind);
         assert_eq!(LessEqual, advance(&mut lex).kind);
+    }
+
+    #[test]
+    fn res_word() {
+        let src: &'static str = "true false";
+        let mut lex = Lexer::new(src);
+        assert_eq!(ResWord(True), advance(&mut lex).kind);
+        assert_eq!(ResWord(False), advance(&mut lex).kind);
     }
 }

@@ -1,6 +1,9 @@
+use codespan::Span;
+
 #[derive(Debug)]
 pub struct File {
     pub decls: Vec<Box<Decl>>,
+    pub span: Span,
 }
 
 #[derive(Debug)]
@@ -11,6 +14,7 @@ pub enum DeclKind {
 #[derive(Debug)]
 pub struct Decl {
     pub kind: DeclKind,
+    pub span: Span,
 }
 
 #[derive(Debug)]
@@ -21,6 +25,7 @@ pub enum StmtKind {
 #[derive(Debug)]
 pub struct Stmt {
     pub kind: StmtKind,
+    pub span: Span,
 }
 
 #[derive(Debug)]
@@ -50,4 +55,5 @@ pub enum ExprKind {
 #[derive(Debug)]
 pub struct Expr {
     pub kind: ExprKind,
+    pub span: Span,
 }

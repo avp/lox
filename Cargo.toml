@@ -9,3 +9,5 @@ edition = "2018"
 [dependencies]
 clap = { git = "https://github.com/clap-rs/clap/" }
 failure = "0.1.6"
+codespan = "0.8.0"
+codespan-reporting = "0.8.0"
