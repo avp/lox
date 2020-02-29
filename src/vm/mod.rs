@@ -1,15 +1,20 @@
 mod jit;
 
-use jit::Jit;
+use crate::ast;
+use jit::JitContext;
 
 struct VM {
-    jit: Jit,
+    jit: JitContext,
 }
 
 impl VM {
-    fn new() -> VM {
+    pub fn new() -> VM {
         VM {
-            jit: Jit::new(),
+            jit: JitContext::new(),
         }
+    }
+
+    pub fn run(ast: ast::P<ast::File>) {
+        unimplemented!();
     }
 }
