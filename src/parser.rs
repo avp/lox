@@ -52,6 +52,15 @@ impl<'src> Parser<'src> {
         self.lexer.token.kind == kind
     }
 
+    fn check_eat(&mut self, kind: TokenKind) -> bool {
+        if self.lexer.token.kind == kind {
+            self.lexer.advance();
+            true
+        } else {
+            false
+        }
+    }
+
     fn eat(&mut self, kind: TokenKind) -> Result<()> {
         if self.lexer.token.kind == kind {
             self.lexer.advance();
@@ -83,13 +92,24 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_stmt(&mut self) -> Result<P<Stmt>> {
-        let expr: P<Expr> = self.parse_expr()?;
-        let span = expr.span;
-        self.eat(TokenKind::Semi)?;
-        Ok(P::new(Stmt {
-            kind: StmtKind::Expr(expr),
-            span,
-        }))
+        let start = self.lexer.token.span;
+        if self.check_eat(TokenKind::ResWord(ResWord::Print)) {
+            let expr: P<Expr> = self.parse_expr()?;
+            let span = start.merge(expr.span);
+            self.eat(TokenKind::Semi)?;
+            Ok(P::new(Stmt {
+                kind: StmtKind::Print(expr),
+                span,
+            }))
+        } else {
+            let expr: P<Expr> = self.parse_expr()?;
+            let span = expr.span;
+            self.eat(TokenKind::Semi)?;
+            Ok(P::new(Stmt {
+                kind: StmtKind::Expr(expr),
+                span,
+            }))
+        }
     }
 
     fn parse_expr(&mut self) -> Result<P<Expr>> {

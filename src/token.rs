@@ -87,6 +87,7 @@ impl std::fmt::Display for TokenKind {
 pub enum ResWord {
     True,
     False,
+    Print,
 }
 
 impl Token {
@@ -131,6 +132,7 @@ impl Token {
             kind: match string {
                 "true" => TokenKind::ResWord(ResWord::True),
                 "false" => TokenKind::ResWord(ResWord::False),
+                "print" => TokenKind::ResWord(ResWord::Print),
                 _ => return None,
             },
             span,
