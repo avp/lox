@@ -27,9 +27,12 @@ struct Opt {
 
 fn main() -> Result<(), failure::Error> {
     let opt = Opt::parse();
-    let mut file = File::open(opt.file)?;
+    let mut file = File::open(&opt.file)?;
     let mut src = String::new();
     file.read_to_string(&mut src)?;
+
+    let mut files: codespan::Files<&str> = codespan::Files::new();
+    let file_id = files.add(&opt.file, &src);
 
     if opt.dump_tokens {
         let mut lexer = lexer::Lexer::new(&src);
@@ -39,10 +42,25 @@ fn main() -> Result<(), failure::Error> {
         }
     }
 
-    if opt.dump_ast {
-        let ast = parser::Parser::parse(&src)?;
-        println!("{:#?}", &ast);
-    }
+    let ast = parser::Parser::parse(&files, file_id);
+    match ast {
+        Err(parser::ParseError::Diag(d)) => {
+            let writer =
+                codespan_reporting::term::termcolor::StandardStream::stderr(
+                    codespan_reporting::term::termcolor::ColorChoice::Auto,
+                );
+            let config = codespan_reporting::term::Config::default();
+            codespan_reporting::term::emit(
+                &mut writer.lock(),
+                &config,
+                &files,
+                &d,
+            ).unwrap();
+        }
+        _ => {
+            println!("{:#?}", &ast);
+        }
+    };
 
     Ok(())
 }

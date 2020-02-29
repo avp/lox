@@ -1,4 +1,5 @@
 use codespan::Span;
+use codespan_reporting::diagnostic::{Diagnostic, Label};
 
 use crate::ast::*;
 use crate::lexer::*;
@@ -6,35 +7,49 @@ use crate::token::*;
 
 pub struct Parser<'src> {
     lexer: Lexer<'src>,
+    file_id: codespan::FileId,
 }
 
 pub type Result<T> = std::result::Result<T, ParseError>;
 
 #[derive(Debug, Fail)]
 pub enum ParseError {
-    #[fail(display = "Unexpected token: {:?}", expected)]
-    Unexpected { expected: TokenKind },
+    #[fail(display = "Unexpected token")]
+    Diag(Diagnostic),
 }
 
 impl<'src> Parser<'src> {
-    pub fn parse(text: &'src str) -> Result<File> {
+    pub fn parse(
+        files: &codespan::Files<&'src str>,
+        file_id: codespan::FileId,
+    ) -> Result<File> {
         let mut parser = Parser {
-            lexer: Lexer::new(text),
+            lexer: Lexer::new(files.source(file_id)),
+            file_id,
         };
         parser.lexer.advance();
         parser.parse_file()
     }
 
-    fn check(&self, kind: TokenKind) -> bool {
-        self.lexer.token.kind == kind
+    fn unexpected(&self) -> ParseError {
+        ParseError::Diag(Diagnostic::new_error(
+            format!("Unexpected '{}'", self.lexer.token.kind),
+            Label::new(self.file_id, self.lexer.token.span, ""),
+        ))
     }
 
-    fn need(&self, kind: TokenKind) -> Result<()> {
-        if self.lexer.token.kind == kind {
-            Ok(())
-        } else {
-            Err(ParseError::Unexpected { expected: kind })
-        }
+    fn expected(&self, kind: TokenKind) -> ParseError {
+        ParseError::Diag(Diagnostic::new_error(
+            format!(
+                "Expected '{}' but found '{}'",
+                kind, self.lexer.token.kind
+            ),
+            Label::new(self.file_id, self.lexer.token.span, ""),
+        ))
+    }
+
+    fn check(&self, kind: TokenKind) -> bool {
+        self.lexer.token.kind == kind
     }
 
     fn eat(&mut self, kind: TokenKind) -> Result<()> {
@@ -42,7 +57,7 @@ impl<'src> Parser<'src> {
             self.lexer.advance();
             Ok(())
         } else {
-            Err(ParseError::Unexpected { expected: kind })
+            Err(self.expected(kind))
         }
     }
 
@@ -70,6 +85,7 @@ impl<'src> Parser<'src> {
     fn parse_stmt(&mut self) -> Result<Stmt> {
         let expr: Box<Expr> = self.parse_expr()?;
         let span = expr.span;
+        self.eat(TokenKind::Semi)?;
         Ok(Stmt {
             kind: StmtKind::Expr(expr),
             span,
@@ -195,7 +211,7 @@ impl<'src> Parser<'src> {
                 self.eat(TokenKind::RParen)?;
                 return Ok(nested);
             }
-            _ => unreachable!("Invalid primary: {:?}", self.lexer.token),
+            _ => return Err(self.unexpected()),
         };
         self.lexer.advance();
         Ok(Box::new(Expr {

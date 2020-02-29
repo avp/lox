@@ -7,13 +7,16 @@ use std::str::CharIndices;
 #[derive(Debug)]
 pub struct Lexer<'src> {
     it: Peekable<CharIndices<'src>>,
+    len: u32,
     pub token: Token,
 }
 
 impl<'src> Lexer<'src> {
     pub fn new(text: &'src str) -> Lexer {
+        let len = text.len() as u32;
         Lexer {
             it: text.char_indices().peekable(),
+            len,
             token: Token::new(TokenKind::Empty, Span::initial()),
         }
     }
@@ -126,7 +129,8 @@ impl<'src> Lexer<'src> {
         loop {
             let c = self.peek();
             if c == '\0' {
-                self.token = Token::new(TokenKind::Eof, Span::initial());
+                let end: ByteIndex = self.len.into();
+                self.token = Token::new(TokenKind::Eof, Span::new(end, end));
                 return;
             }
             if c.is_whitespace() {

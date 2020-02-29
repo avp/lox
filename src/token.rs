@@ -43,6 +43,46 @@ pub enum TokenKind {
     Eof,
 }
 
+impl std::fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match *self {
+                Self::Ident => "identifier",
+                Self::ResWord(_) => "reserved word",
+
+                Self::StringLiteral => "string literal",
+                Self::NumberLiteral => "number",
+
+                Self::LParen => "(",
+                Self::RParen => ")",
+                Self::LBrace => "{",
+                Self::RBrace => "}",
+                Self::Comma => ",",
+                Self::Dot => ".",
+                Self::Minus => "-",
+                Self::Plus => "+",
+                Self::Star => "*",
+                Self::Slash => "/",
+                Self::Semi => ";",
+
+                Self::Bang => "!",
+                Self::BangEqual => "!=",
+                Self::Equal => "=",
+                Self::EqualEqual => "==",
+                Self::Greater => ">",
+                Self::GreaterEqual => ">=",
+                Self::Less => "<",
+                Self::LessEqual => "<=",
+
+                Self::Empty => "<empty>",
+                Self::Eof => "<eof>",
+            }
+        )
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ResWord {
     True,
