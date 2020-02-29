@@ -22,7 +22,7 @@ impl<'src> Parser<'src> {
     pub fn parse(
         files: &codespan::Files<&'src str>,
         file_id: codespan::FileId,
-    ) -> Result<File> {
+    ) -> Result<P<File>> {
         let mut parser = Parser {
             lexer: Lexer::new(files.source(file_id)),
             file_id,
@@ -61,43 +61,43 @@ impl<'src> Parser<'src> {
         }
     }
 
-    fn parse_file(&mut self) -> Result<File> {
+    fn parse_file(&mut self) -> Result<P<File>> {
         let mut decls = vec![];
         while !self.check(TokenKind::Eof) {
-            decls.push(Box::new(self.parse_decl()?));
+            decls.push(self.parse_decl()?);
         }
         let span = match decls.first() {
             Some(d) => d.span.merge(decls.last().unwrap().span),
             None => Span::initial(),
         };
-        Ok(File { decls, span })
+        Ok(P::new(File { decls, span }))
     }
 
-    fn parse_decl(&mut self) -> Result<Decl> {
+    fn parse_decl(&mut self) -> Result<P<Decl>> {
         let stmt = self.parse_stmt()?;
         let span = stmt.span;
-        Ok(Decl {
-            kind: DeclKind::Stmt(Box::new(stmt)),
+        Ok(P::new(Decl {
+            kind: DeclKind::Stmt(stmt),
             span,
-        })
+        }))
     }
 
-    fn parse_stmt(&mut self) -> Result<Stmt> {
-        let expr: Box<Expr> = self.parse_expr()?;
+    fn parse_stmt(&mut self) -> Result<P<Stmt>> {
+        let expr: P<Expr> = self.parse_expr()?;
         let span = expr.span;
         self.eat(TokenKind::Semi)?;
-        Ok(Stmt {
+        Ok(P::new(Stmt {
             kind: StmtKind::Expr(expr),
             span,
-        })
+        }))
     }
 
-    fn parse_expr(&mut self) -> Result<Box<Expr>> {
+    fn parse_expr(&mut self) -> Result<P<Expr>> {
         Ok(self.parse_binary()?)
     }
 
-    fn parse_binary(&mut self) -> Result<Box<Expr>> {
-        let mut top: Box<Expr> = self.parse_unary()?;
+    fn parse_binary(&mut self) -> Result<P<Expr>> {
+        let mut top: P<Expr> = self.parse_unary()?;
 
         fn get_prec(kind: &TokenKind) -> u32 {
             match kind {
@@ -107,13 +107,9 @@ impl<'src> Parser<'src> {
             }
         }
 
-        fn new_node(
-            left: Box<Expr>,
-            op: &TokenKind,
-            right: Box<Expr>,
-        ) -> Box<Expr> {
+        fn new_node(left: P<Expr>, op: &TokenKind, right: P<Expr>) -> P<Expr> {
             let span = left.span.merge(right.span);
-            Box::new(Expr {
+            P::new(Expr {
                 kind: ExprKind::BinOp(
                     match op {
                         TokenKind::Plus => BinOpKind::Add,
@@ -132,7 +128,7 @@ impl<'src> Parser<'src> {
             })
         }
 
-        let mut stack: Vec<(Box<Expr>, TokenKind)> = vec![];
+        let mut stack: Vec<(P<Expr>, TokenKind)> = vec![];
 
         loop {
             let prec = get_prec(&self.lexer.token.kind);
@@ -161,7 +157,7 @@ impl<'src> Parser<'src> {
         Ok(top)
     }
 
-    fn parse_unary(&mut self) -> Result<Box<Expr>> {
+    fn parse_unary(&mut self) -> Result<P<Expr>> {
         let start = self.lexer.token.span;
         match self.lexer.token.kind {
             TokenKind::Plus => {
@@ -172,7 +168,7 @@ impl<'src> Parser<'src> {
                 self.lexer.advance();
                 let expr = self.parse_expr()?;
                 let span = start.merge(expr.span);
-                Ok(Box::new(Expr {
+                Ok(P::new(Expr {
                     kind: ExprKind::UnOp(UnOpKind::Neg, expr),
                     span,
                 }))
@@ -181,7 +177,7 @@ impl<'src> Parser<'src> {
                 self.lexer.advance();
                 let expr = self.parse_expr()?;
                 let span = start.merge(expr.span);
-                Ok(Box::new(Expr {
+                Ok(P::new(Expr {
                     kind: ExprKind::UnOp(UnOpKind::Not, expr),
                     span,
                 }))
@@ -190,7 +186,7 @@ impl<'src> Parser<'src> {
         }
     }
 
-    fn parse_primary(&mut self) -> Result<Box<Expr>> {
+    fn parse_primary(&mut self) -> Result<P<Expr>> {
         let start = self.lexer.token.span;
         let kind = match self.lexer.token.kind {
             TokenKind::Ident => {
@@ -214,7 +210,7 @@ impl<'src> Parser<'src> {
             _ => return Err(self.unexpected()),
         };
         self.lexer.advance();
-        Ok(Box::new(Expr {
+        Ok(P::new(Expr {
             kind,
             span: start,
         }))

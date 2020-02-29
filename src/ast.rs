@@ -1,14 +1,16 @@
 use codespan::Span;
 
+pub type P<T> = Box<T>;
+
 #[derive(Debug)]
 pub struct File {
-    pub decls: Vec<Box<Decl>>,
+    pub decls: Vec<P<Decl>>,
     pub span: Span,
 }
 
 #[derive(Debug)]
 pub enum DeclKind {
-    Stmt(Box<Stmt>),
+    Stmt(P<Stmt>),
 }
 
 #[derive(Debug)]
@@ -19,7 +21,7 @@ pub struct Decl {
 
 #[derive(Debug)]
 pub enum StmtKind {
-    Expr(Box<Expr>),
+    Expr(P<Expr>),
 }
 
 #[derive(Debug)]
@@ -44,8 +46,8 @@ pub enum UnOpKind {
 
 #[derive(Debug)]
 pub enum ExprKind {
-    BinOp(BinOpKind, Box<Expr>, Box<Expr>),
-    UnOp(UnOpKind, Box<Expr>),
+    BinOp(BinOpKind, P<Expr>, P<Expr>),
+    UnOp(UnOpKind, P<Expr>),
     NumberLiteral(f64),
     StringLiteral(String),
     BoolLiteral(bool),
