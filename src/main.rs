@@ -27,6 +27,37 @@ struct Opt {
     file: PathBuf,
 }
 
+fn run(
+    opt: &Opt,
+    files: &codespan::Files<&str>,
+    file_id: codespan::FileId,
+) -> Result<(), failure::Error> {
+    if opt.dump_tokens {
+        let mut lexer = lexer::Lexer::new(files.source(file_id));
+        while lexer.token.kind != token::TokenKind::Eof {
+            lexer.advance();
+            println!("{:?}", lexer.token);
+        }
+    }
+
+    let ast_res = parser::Parser::parse(&files, file_id);
+    match ast_res {
+        Err(err) => {
+            err.emit(&files);
+            return Err(format_err!("Parsing failed"));
+        }
+        Ok(ast) => {
+            if opt.dump_ast {
+                println!("{:#?}", &ast);
+            }
+            let mut vm = vm::VM::new();
+            vm.run(ast);
+        }
+    };
+
+    Ok(())
+}
+
 fn main() -> Result<(), failure::Error> {
     let opt = Opt::parse();
     let mut file = File::open(&opt.file)?;
@@ -36,26 +67,6 @@ fn main() -> Result<(), failure::Error> {
     let mut files: codespan::Files<&str> = codespan::Files::new();
     let file_id = files.add(&opt.file, &src);
 
-    if opt.dump_tokens {
-        let mut lexer = lexer::Lexer::new(&src);
-        while lexer.token.kind != token::TokenKind::Eof {
-            lexer.advance();
-            println!("{:?}", lexer.token);
-        }
-    }
-
-    let ast = parser::Parser::parse(&files, file_id);
-    match ast {
-        Err(err) => {
-            err.emit(&files);
-            return Err(err.into());
-        }
-        _ => {
-            if opt.dump_ast {
-                println!("{:#?}", &ast);
-            }
-        }
-    };
-
+    run(&opt, &files, file_id)?;
     Ok(())
 }

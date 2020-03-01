@@ -3,6 +3,7 @@ mod mem;
 
 use crate::ast;
 
+use emitter::Reg;
 use mem::ExecHeap;
 
 pub struct JitContext {
@@ -16,9 +17,9 @@ impl JitContext {
         }
     }
 
-    pub fn compile(&mut self, ast: &ast::File) -> *const u8 {
-        let jit = Jit::new(self, ast);
-        unimplemented!()
+    pub fn compile(&mut self, ast: &ast::File) -> fn() -> u64 {
+        let mut jit = Jit::new(self, ast);
+        jit.compile()
     }
 }
 
@@ -43,7 +44,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         }
     }
 
-    pub fn compile(&mut self) -> *const u8 {
+    pub fn compile(&mut self) -> fn() -> u64 {
         use ast::*;
         self.emit_prologue(8 * 8);
         match &(self.file.decls[0]).kind {
@@ -54,12 +55,15 @@ impl<'ctx, 'ast> Jit<'_, '_> {
             _ => unimplemented!(),
         };
         self.emit_epilogue();
-        self.e.buf.as_ptr()
+        unsafe { std::mem::transmute(self.e.buf.as_ptr()) }
     }
 
     fn compile_expr(&mut self, expr: &ast::Expr) {
         use ast::ExprKind::*;
         match expr.kind {
+            NumberLiteral(x) => {
+                self.e.mov_reg_imm(Reg::RAX, x);
+            }
             _ => unimplemented!(),
         }
     }

@@ -3,7 +3,7 @@ mod jit;
 use crate::ast;
 use jit::JitContext;
 
-struct VM {
+pub struct VM {
     jit: JitContext,
 }
 
@@ -14,7 +14,8 @@ impl VM {
         }
     }
 
-    pub fn run(ast: ast::P<ast::File>) {
-        unimplemented!();
+    pub fn run(&mut self, ast: ast::P<ast::File>) -> u64 {
+        let fun: fn() -> u64 = self.jit.compile(&ast);
+        fun()
     }
 }
