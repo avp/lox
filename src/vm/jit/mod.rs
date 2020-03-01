@@ -1,3 +1,4 @@
+mod emitter;
 mod mem;
 
 use mem::ExecHeap;
