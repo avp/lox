@@ -1,5 +1,9 @@
+mod imm;
 mod reg;
 
+use byteorder::{LittleEndian, WriteBytesExt};
+
+pub use imm::Immediate;
 pub use reg::{AddrMode, Reg, FP, S};
 
 // (base, index, offset)
@@ -24,6 +28,16 @@ impl<'buf> Emitter<'buf> {
     fn emit(&mut self, byte: u8) {
         self.buf[self.index] = byte;
         self.index += 1;
+    }
+
+    pub fn emit_imm<T: Immediate>(&mut self, imm: T) {
+        let size = std::mem::size_of::<T>();
+        let buf: *mut u8 = self.buf[self.index..self.index + size].as_mut_ptr();
+        let src: *const u8 = (&imm) as *const T as *const u8;
+        unsafe {
+            std::ptr::copy_nonoverlapping(src, buf, size);
+        }
+        self.index += size;
     }
 
     fn emit_u32(&mut self, num: u32) {
@@ -187,6 +201,16 @@ impl<'buf> Emitter<'buf> {
         assert!(dst.is_fp());
         self.emit_fpreg_rm(fp, scale, 0x10, dst, src);
     }
+    pub fn mov_reg_imm<T: Immediate>(&mut self, reg: Reg, imm: T)
+    where
+        T: std::fmt::Debug,
+    {
+        let s = T::s();
+        self.emit_rex(s, (reg, Reg::NoIndex, 0), Reg::NONE);
+        self.emit(if s == S::B { 0xb0 } else { 0xb8 } + reg.ord7());
+        dbg!(&imm);
+        self.emit_imm(imm);
+    }
 
     pub fn leave(&mut self) {
         self.emit(0xc9);
@@ -299,6 +323,11 @@ mod tests {
         check!(e, [0x48, 0x89, 0x11]);
         e.mov_reg_reg(S::Q, Reg::RCX, Reg::RDX);
         check!(e, [0x48, 0x89, 0xd1]);
+        e.mov_reg_imm(Reg::RCX, 0xaabbccddeeffu64);
+        check!(
+            e,
+            [0x48, 0xb9, 0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x00, 0x00,]
+        );
     }
 
     #[test]

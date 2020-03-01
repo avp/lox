@@ -100,6 +100,7 @@ pub enum Reg {
     MM7,
     XMM7,
 
+    NONE,
     NoIndex,
     ModSIB,
 }
@@ -193,6 +194,7 @@ impl Reg {
             MM7 => 7,
             XMM7 => 7,
 
+            NONE => 0,
             NoIndex => 4,
             ModSIB => 5,
         }
