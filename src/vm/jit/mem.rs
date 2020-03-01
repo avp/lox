@@ -11,7 +11,7 @@ impl ExecHeap {
         ExecHeap { pools: vec![] }
     }
 
-    pub fn alloc(&mut self, size: usize) -> &mut [u8] {
+    pub fn alloc<'a, 'b>(&'a mut self, size: usize) -> &'b mut [u8] {
         for pool in &mut self.pools {
             if let Some(res) = pool.alloc(size) {
                 return unsafe { std::slice::from_raw_parts_mut(res, size) };

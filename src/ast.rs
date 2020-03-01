@@ -32,7 +32,7 @@ pub struct Stmt {
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum BinOpKind {
     Add,
     Sub,
@@ -40,7 +40,7 @@ pub enum BinOpKind {
     Div,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum UnOpKind {
     Neg,
     Not,

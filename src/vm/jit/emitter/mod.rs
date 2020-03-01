@@ -5,8 +5,8 @@ pub use reg::{AddrMode, Reg, FP, S};
 // (base, index, offset)
 type RM = (Reg, Reg, i32);
 
-struct Emitter<'buf> {
-    buf: &'buf mut [u8],
+pub struct Emitter<'buf> {
+    pub buf: &'buf mut [u8],
     index: usize,
 }
 
