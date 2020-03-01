@@ -23,6 +23,9 @@ struct Opt {
     #[clap(long, help = "Dump the AST")]
     dump_ast: bool,
 
+    #[clap(long, help = "Dump JIT assembly")]
+    dump_asm: bool,
+
     #[clap(name = "FILE", parse(from_os_str))]
     file: PathBuf,
 }
@@ -50,8 +53,9 @@ fn run(
             if opt.dump_ast {
                 println!("{:#?}", &ast);
             }
-            let mut vm = vm::VM::new();
-            vm.run(ast);
+            let mut vm = vm::VM::new(opt.dump_asm);
+            let result = vm.run(ast);
+            println!("Result: {}", result);
         }
     };
 

@@ -11,10 +11,10 @@ type RM = (Reg, Reg, i32);
 
 pub struct Emitter<'buf> {
     pub buf: &'buf mut [u8],
-    index: usize,
+    pub index: usize,
 }
 
-enum Scale {
+pub enum Scale {
     Scale(u32),
     NoScale,
     RegScale,
@@ -208,8 +208,17 @@ impl<'buf> Emitter<'buf> {
         let s = T::s();
         self.emit_rex(s, (reg, Reg::NoIndex, 0), Reg::NONE);
         self.emit(if s == S::B { 0xb0 } else { 0xb8 } + reg.ord7());
-        dbg!(&imm);
         self.emit_imm(imm);
+    }
+
+    pub fn add_reg_reg(&mut self, s: S, dst: Reg, src: Reg) {
+        self.add_rm_reg(s, Scale::RegScale, (dst, Reg::NoIndex, 0), src);
+    }
+    pub fn add_rm_reg(&mut self, s: S, scale: Scale, dst: RM, src: Reg) {
+        self.emit_mod_rm_full(s, scale, 0x00, src, dst);
+    }
+    pub fn add_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
+        self.emit_mod_rm_full(s, scale, 0x02, dst, src);
     }
 
     pub fn leave(&mut self) {
@@ -328,6 +337,15 @@ mod tests {
             e,
             [0x48, 0xb9, 0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x00, 0x00,]
         );
+    }
+
+    #[test]
+    fn add() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.add_reg_reg(S::Q, Reg::RCX, Reg::RDX);
+        check!(e, [0x48, 0x01, 0xd1]);
     }
 
     #[test]

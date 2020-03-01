@@ -61,6 +61,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
+name = "capstone"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "031ba51c39151a1d6336ec859646153187204b0147c7b3f6fe2de636f1b8dbb3"
+dependencies = [
+ "capstone-sys",
+]
+
+[[package]]
+name = "capstone-sys"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fae25eddcb80e24f98c35952c37a91ff7f8d0f60dbbdafb9763e8d5cc566b8d7"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -187,6 +205,7 @@ name = "lox"
 version = "0.1.0"
 dependencies = [
  "byteorder",
+ "capstone",
  "clap",
  "codespan",
  "codespan-reporting",

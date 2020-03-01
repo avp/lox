@@ -8,9 +8,9 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn new() -> VM {
+    pub fn new(dump_asm: bool) -> VM {
         VM {
-            jit: JitContext::new(),
+            jit: JitContext::new(dump_asm),
         }
     }
 
