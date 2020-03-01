@@ -8,6 +8,12 @@ pub enum S {
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum FP {
+    Float,
+    Double,
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Reg {
     RAX,
     EAX,
@@ -194,6 +200,15 @@ impl Reg {
 
     pub fn ord7(&self) -> u8 {
         self.ord() & 0x7
+    }
+
+    pub fn is_fp(&self) -> bool {
+        use Reg::*;
+        match self {
+            MM0 | XMM0 | MM1 | XMM1 | MM2 | XMM2 | MM3 | XMM3 | MM4 | XMM4
+            | MM5 | XMM5 | MM6 | XMM6 | MM7 | XMM7 => true,
+            _ => false,
+        }
     }
 }
 

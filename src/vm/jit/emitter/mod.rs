@@ -1,6 +1,6 @@
 mod reg;
 
-pub use reg::{AddrMode, Reg, S};
+pub use reg::{AddrMode, Reg, FP, S};
 
 // (base, index, offset)
 type RM = (Reg, Reg, i32);
@@ -33,9 +33,9 @@ impl<'buf> Emitter<'buf> {
         self.emit(((num >> 24) & 0xff) as u8);
     }
 
-    fn emit_rex(&mut self, s: S, rm: Reg, sib: Reg, reg: Reg) {
-        let b: u8 = rm.ord() >> 3;
-        let x: u8 = sib.ord() >> 3;
+    fn emit_rex(&mut self, s: S, (base, index, _): RM, reg: Reg) {
+        let b: u8 = base.ord() >> 3;
+        let x: u8 = index.ord() >> 3;
         let r: u8 = reg.ord() >> 3;
         let w: u8 = (s == S::Q || s == S::SLQ).into();
         if (w, b, x, r) != (0, 0, 0, 0) {
@@ -57,7 +57,7 @@ impl<'buf> Emitter<'buf> {
         if s != S::B {
             opcode += 1;
         }
-        self.emit_rex(s, base, index, reg);
+        self.emit_rex(s, rm, reg);
         self.emit(opcode);
         self.emit_mod_rm(s, scale, reg, rm);
     }
@@ -84,7 +84,6 @@ impl<'buf> Emitter<'buf> {
             }
             Scale::RegScale => {
                 let rm = base;
-                dbg!(rm, reg);
                 self.emit(encode_mod_rm(AddrMode::Reg, rm, reg));
             }
             Scale::Scale(scale) => {
@@ -116,6 +115,50 @@ impl<'buf> Emitter<'buf> {
         }
     }
 
+    fn emit_fptype(&mut self, fp: FP) {
+        self.emit(match fp {
+            FP::Double => 0xf2,
+            FP::Float => 0xf3,
+        })
+    }
+
+    fn emit_reg_fpreg(&mut self, fp: FP, opcode: u8, dst: Reg, src: Reg) {
+        self.emit_fptype(fp);
+        self.emit(0x0f);
+        self.emit(opcode);
+        self.emit(encode_mod_rm(AddrMode::Reg, src, dst));
+    }
+
+    fn emit_fpreg_rm(
+        &mut self,
+        fp: FP,
+        scale: Scale,
+        opcode: u8,
+        dst: Reg,
+        src: RM,
+    ) {
+        self.emit_fptype(fp);
+        self.emit_rex(S::L, src, dst);
+        self.emit(0x0f);
+        self.emit(opcode);
+        self.emit_mod_rm(S::L, scale, dst, src);
+    }
+
+    fn emit_rm_fpreg(
+        &mut self,
+        fp: FP,
+        scale: Scale,
+        opcode: u8,
+        dst: RM,
+        src: Reg,
+    ) {
+        self.emit_fptype(fp);
+        self.emit_rex(S::L, dst, src);
+        self.emit(0x0f);
+        self.emit(opcode);
+        self.emit_mod_rm(S::L, scale, src, dst);
+    }
+
     pub fn pushq(&mut self, reg: Reg) {
         self.emit(0x50 + reg.ord7());
     }
@@ -132,6 +175,18 @@ impl<'buf> Emitter<'buf> {
     pub fn mov_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
         self.emit_mod_rm_full(s, scale, 0x8a, dst, src);
     }
+    pub fn mov_fpreg_fpreg(&mut self, fp: FP, dst: Reg, src: Reg) {
+        assert!(dst.is_fp() && src.is_fp());
+        self.emit_reg_fpreg(fp, 0x10, dst, src);
+    }
+    pub fn mov_rm_fpreg(&mut self, fp: FP, scale: Scale, dst: RM, src: Reg) {
+        assert!(src.is_fp());
+        self.emit_rm_fpreg(fp, scale, 0x11, dst, src);
+    }
+    pub fn mov_fpreg_rm(&mut self, fp: FP, scale: Scale, dst: Reg, src: RM) {
+        assert!(dst.is_fp());
+        self.emit_fpreg_rm(fp, scale, 0x10, dst, src);
+    }
 
     pub fn leave(&mut self) {
         self.emit(0xc9);
@@ -147,13 +202,11 @@ impl<'buf> Emitter<'buf> {
 fn encode_mod_rm(mode: AddrMode, rm: Reg, reg: Reg) -> u8 {
     // If using SIB mode, then use 4 for RM.
     // Table 2-2 (Note 1).
-    dbg!(rm, reg);
     let rm = if mode.mode_sib() != 0 {
         0b100
     } else {
         rm.ord7()
     };
-    dbg!(reg.ord7(), rm);
     (mode.mode_mod() << 6) | ((reg.ord7()) << 3) | (rm & 0b111)
 }
 
@@ -246,5 +299,28 @@ mod tests {
         check!(e, [0x48, 0x89, 0x11]);
         e.mov_reg_reg(S::Q, Reg::RCX, Reg::RDX);
         check!(e, [0x48, 0x89, 0xd1]);
+    }
+
+    #[test]
+    fn fp() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.mov_rm_fpreg(
+            FP::Double,
+            Scale::NoScale,
+            (Reg::RAX, Reg::NoIndex, 0),
+            Reg::XMM0,
+        );
+        check!(e, [0xf2, 0x0f, 0x11, 0x00]);
+        e.mov_fpreg_rm(
+            FP::Double,
+            Scale::NoScale,
+            Reg::XMM0,
+            (Reg::RAX, Reg::NoIndex, 0),
+        );
+        check!(e, [0xf2, 0x0f, 0x10, 0x00]);
+        e.mov_fpreg_fpreg(FP::Double, Reg::XMM0, Reg::XMM1);
+        check!(e, [0xf2, 0x0f, 0x10, 0xc1]);
     }
 }
