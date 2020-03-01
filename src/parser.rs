@@ -111,6 +111,14 @@ impl<'src> Parser<'src> {
                 kind: StmtKind::Print(expr),
                 span,
             }))
+        } else if self.check_eat(TokenKind::ResWord(ResWord::Return)) {
+            let expr: P<Expr> = self.parse_expr()?;
+            let span = start.merge(expr.span);
+            self.eat(TokenKind::Semi)?;
+            Ok(P::new(Stmt {
+                kind: StmtKind::Return(expr),
+                span,
+            }))
         } else {
             let expr: P<Expr> = self.parse_expr()?;
             let span = expr.span;

@@ -22,6 +22,7 @@ pub struct Decl {
 #[derive(Debug)]
 pub enum StmtKind {
     Expr(P<Expr>),
+    Return(P<Expr>),
     Print(P<Expr>),
 }
 
