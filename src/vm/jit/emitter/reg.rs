@@ -95,6 +95,7 @@ pub enum Reg {
     XMM7,
 
     NoIndex,
+    ModSIB,
 }
 
 impl Reg {
@@ -187,6 +188,7 @@ impl Reg {
             XMM7 => 7,
 
             NoIndex => 4,
+            ModSIB => 5,
         }
     }
 
@@ -197,9 +199,15 @@ impl Reg {
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum AddrMode {
+    AtReg,
     AtBase,
+
+    AtRegDisp8,
     AtBaseDisp8,
+
+    AtRegDisp32,
     AtBaseDisp32,
+
     Reg,
 }
 
@@ -211,15 +219,21 @@ impl AddrMode {
         // MM is the mod
         // SS is the SIB indicator
         match self {
+            AtReg => 0b0000_0000,
             AtBase => 0b0000_0001,
+
+            AtRegDisp8 => 0b0001_0000,
             AtBaseDisp8 => 0b0001_0001,
+
+            AtRegDisp32 => 0b0010_0000,
             AtBaseDisp32 => 0b0010_0001,
+
             Reg => 0b0011_0000,
         }
     }
 
     pub fn mode_mod(&self) -> u8 {
-        dbg!((self.ord() >> 4) & 0b111)
+        (self.ord() >> 4) & 0b111
     }
 
     pub fn mode_sib(&self) -> u8 {
