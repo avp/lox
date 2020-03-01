@@ -10,6 +10,12 @@ struct Emitter<'buf> {
     index: usize,
 }
 
+enum Scale {
+    Scale(u32),
+    NoScale,
+    RegScale,
+}
+
 impl<'buf> Emitter<'buf> {
     pub fn new(buf: &'buf mut [u8]) -> Emitter {
         Emitter { buf, index: 0 }
@@ -39,29 +45,15 @@ impl<'buf> Emitter<'buf> {
         }
     }
 
-    fn emit_reg_rm(
-        &mut self,
-        s: S,
-        scale: Option<u32>,
-        opcode: u8,
-        dst: Reg,
-        src: RM,
-    ) {
-        self.emit_mod_rm_full(s, scale, opcode, dst, src);
-    }
-
     fn emit_mod_rm_full(
         &mut self,
         s: S,
-        scale: Option<u32>,
+        scale: Scale,
         mut opcode: u8,
         reg: Reg,
         rm: RM,
     ) {
         let (base, index, _) = rm;
-        if scale.is_some() {
-            assert_ne!(index, Reg::NoIndex);
-        }
         if s != S::B {
             opcode += 1;
         }
@@ -73,12 +65,12 @@ impl<'buf> Emitter<'buf> {
     fn emit_mod_rm(
         &mut self,
         s: S,
-        scale: Option<u32>,
+        scale: Scale,
         reg: Reg,
         (base, index, offset): RM,
     ) {
         match scale {
-            None => {
+            Scale::NoScale => {
                 let rm = base;
                 if offset == 0 {
                     self.emit(encode_mod_rm(AddrMode::AtReg, rm, reg));
@@ -90,7 +82,12 @@ impl<'buf> Emitter<'buf> {
                     self.emit_u32(offset as u32);
                 }
             }
-            Some(scale) => {
+            Scale::RegScale => {
+                let rm = base;
+                dbg!(rm, reg);
+                self.emit(encode_mod_rm(AddrMode::Reg, rm, reg));
+            }
+            Scale::Scale(scale) => {
                 if offset == 0 {
                     self.emit(encode_mod_rm(
                         AddrMode::AtBase,
@@ -126,12 +123,14 @@ impl<'buf> Emitter<'buf> {
         self.emit(0x58 + reg.ord7());
     }
 
-    pub fn mov_rm_reg(&mut self, s: S, scale: Option<u32>, dst: Reg, src: RM) {
-        self.emit_reg_rm(s, scale, 0x88, dst, src);
+    pub fn mov_reg_reg(&mut self, s: S, dst: Reg, src: Reg) {
+        self.mov_rm_reg(s, Scale::RegScale, (dst, Reg::NoIndex, 0), src);
     }
-
-    pub fn mov_reg_rm(&mut self, s: S, scale: Option<u32>, dst: Reg, src: RM) {
-        self.emit_reg_rm(s, scale, 0x8a, dst, src);
+    pub fn mov_rm_reg(&mut self, s: S, scale: Scale, dst: RM, src: Reg) {
+        self.emit_mod_rm_full(s, scale, 0x88, src, dst);
+    }
+    pub fn mov_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
+        self.emit_mod_rm_full(s, scale, 0x8a, dst, src);
     }
 
     pub fn leave(&mut self) {
@@ -148,11 +147,13 @@ impl<'buf> Emitter<'buf> {
 fn encode_mod_rm(mode: AddrMode, rm: Reg, reg: Reg) -> u8 {
     // If using SIB mode, then use 4 for RM.
     // Table 2-2 (Note 1).
+    dbg!(rm, reg);
     let rm = if mode.mode_sib() != 0 {
         0b100
     } else {
         rm.ord7()
     };
+    dbg!(reg.ord7(), rm);
     (mode.mode_mod() << 6) | ((reg.ord7()) << 3) | (rm & 0b111)
 }
 
@@ -215,16 +216,35 @@ mod tests {
         let mut buf = [0u8; 0x100];
         let mut e = Emitter::new(&mut buf);
         reset!(e);
-        e.mov_reg_rm(S::Q, Some(1), Reg::RCX, (Reg::RDX, Reg::RBX, 9));
+        e.mov_reg_rm(
+            S::Q,
+            Scale::Scale(1),
+            Reg::RCX,
+            (Reg::RDX, Reg::RBX, 9),
+        );
         check!(e, [0x48, 0x8b, 0x4c, 0x1a, 0x09]);
         e.mov_reg_rm(
             S::Q,
-            None,
+            Scale::NoScale,
             Reg::RCX,
             (Reg::RDX, Reg::NoIndex, 0),
         );
         check!(e, [0x48, 0x8b, 0x0a]);
-        e.mov_reg_rm(S::Q, Some(1), Reg::RCX, (Reg::RDX, Reg::RBX, 0));
+        e.mov_reg_rm(
+            S::Q,
+            Scale::Scale(1),
+            Reg::RCX,
+            (Reg::RDX, Reg::RBX, 0),
+        );
         check!(e, [0x48, 0x8b, 0x0c, 0x1a]);
+        e.mov_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (Reg::RCX, Reg::NoIndex, 0),
+            Reg::RDX,
+        );
+        check!(e, [0x48, 0x89, 0x11]);
+        e.mov_reg_reg(S::Q, Reg::RCX, Reg::RDX);
+        check!(e, [0x48, 0x89, 0xd1]);
     }
 }
