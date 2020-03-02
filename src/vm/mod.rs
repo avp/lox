@@ -1,4 +1,7 @@
 mod jit;
+mod value;
+
+pub use value::Value;
 
 use crate::ast;
 use jit::JitContext;
@@ -14,8 +17,8 @@ impl VM {
         }
     }
 
-    pub fn run(&mut self, ast: ast::P<ast::File>) -> u64 {
-        let fun: fn() -> u64 = self.jit.compile(&ast);
+    pub fn run(&mut self, ast: ast::P<ast::File>) -> Value {
+        let fun = self.jit.compile(&ast);
         fun()
     }
 }

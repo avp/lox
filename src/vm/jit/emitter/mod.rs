@@ -85,15 +85,28 @@ impl<'buf> Emitter<'buf> {
     ) {
         match scale {
             Scale::NoScale => {
-                let rm = base;
-                if offset == 0 {
-                    self.emit(encode_mod_rm(AddrMode::AtReg, rm, reg));
-                } else if offset < 0xff {
-                    self.emit(encode_mod_rm(AddrMode::AtRegDisp8, rm, reg));
-                    self.emit(offset as u8);
+                if base == Reg::RSP {
+                    self.emit_mod_rm(
+                        s,
+                        Scale::Scale(1),
+                        reg,
+                        (base, Reg::NoIndex, offset),
+                    );
                 } else {
-                    self.emit(encode_mod_rm(AddrMode::AtRegDisp32, rm, reg));
-                    self.emit_u32(offset as u32);
+                    let rm = base;
+                    if offset == 0 {
+                        self.emit(encode_mod_rm(AddrMode::AtReg, rm, reg));
+                    } else if offset < 0xff {
+                        self.emit(encode_mod_rm(AddrMode::AtRegDisp8, rm, reg));
+                        self.emit(offset as u8);
+                    } else {
+                        self.emit(encode_mod_rm(
+                            AddrMode::AtRegDisp32,
+                            rm,
+                            reg,
+                        ));
+                        self.emit_u32(offset as u32);
+                    }
                 }
             }
             Scale::RegScale => {
@@ -136,14 +149,14 @@ impl<'buf> Emitter<'buf> {
         })
     }
 
-    fn emit_reg_fpreg(&mut self, fp: FP, opcode: u8, dst: Reg, src: Reg) {
+    fn emit_fp_fp(&mut self, fp: FP, opcode: u8, dst: Reg, src: Reg) {
         self.emit_fptype(fp);
         self.emit(0x0f);
         self.emit(opcode);
         self.emit(encode_mod_rm(AddrMode::Reg, src, dst));
     }
 
-    fn emit_fpreg_rm(
+    fn emit_fp_rm(
         &mut self,
         fp: FP,
         scale: Scale,
@@ -158,7 +171,7 @@ impl<'buf> Emitter<'buf> {
         self.emit_mod_rm(S::L, scale, dst, src);
     }
 
-    fn emit_rm_fpreg(
+    fn emit_rm_fp(
         &mut self,
         fp: FP,
         scale: Scale,
@@ -181,25 +194,27 @@ impl<'buf> Emitter<'buf> {
     }
 
     pub fn mov_reg_reg(&mut self, s: S, dst: Reg, src: Reg) {
+        assert!(!dst.is_fp() && !src.is_fp());
         self.mov_rm_reg(s, Scale::RegScale, (dst, Reg::NoIndex, 0), src);
     }
     pub fn mov_rm_reg(&mut self, s: S, scale: Scale, dst: RM, src: Reg) {
         self.emit_mod_rm_full(s, scale, 0x88, src, dst);
     }
     pub fn mov_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
+        assert!(!dst.is_fp());
         self.emit_mod_rm_full(s, scale, 0x8a, dst, src);
     }
-    pub fn mov_fpreg_fpreg(&mut self, fp: FP, dst: Reg, src: Reg) {
+    pub fn mov_fp_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
         assert!(dst.is_fp() && src.is_fp());
-        self.emit_reg_fpreg(fp, 0x10, dst, src);
+        self.emit_fp_fp(fp, 0x10, dst, src);
     }
-    pub fn mov_rm_fpreg(&mut self, fp: FP, scale: Scale, dst: RM, src: Reg) {
+    pub fn mov_rm_fp(&mut self, fp: FP, scale: Scale, dst: RM, src: Reg) {
         assert!(src.is_fp());
-        self.emit_rm_fpreg(fp, scale, 0x11, dst, src);
+        self.emit_rm_fp(fp, scale, 0x11, dst, src);
     }
-    pub fn mov_fpreg_rm(&mut self, fp: FP, scale: Scale, dst: Reg, src: RM) {
+    pub fn mov_fp_rm(&mut self, fp: FP, scale: Scale, dst: Reg, src: RM) {
         assert!(dst.is_fp());
-        self.emit_fpreg_rm(fp, scale, 0x10, dst, src);
+        self.emit_fp_rm(fp, scale, 0x10, dst, src);
     }
     pub fn mov_reg_imm<T: Immediate>(&mut self, reg: Reg, imm: T)
     where
@@ -219,6 +234,23 @@ impl<'buf> Emitter<'buf> {
     }
     pub fn add_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
         self.emit_mod_rm_full(s, scale, 0x02, dst, src);
+    }
+
+    pub fn add_fp_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
+        assert!(dst.is_fp() && src.is_fp());
+        self.emit_fp_fp(fp, 0x58, dst, src);
+    }
+    pub fn sub_fp_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
+        assert!(dst.is_fp() && src.is_fp());
+        self.emit_fp_fp(fp, 0x5c, dst, src);
+    }
+    pub fn mul_fp_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
+        assert!(dst.is_fp() && src.is_fp());
+        self.emit_fp_fp(fp, 0x59, dst, src);
+    }
+    pub fn div_fp_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
+        assert!(dst.is_fp() && src.is_fp());
+        self.emit_fp_fp(fp, 0x5e, dst, src);
     }
 
     pub fn leave(&mut self) {
@@ -353,21 +385,30 @@ mod tests {
         let mut buf = [0u8; 0x100];
         let mut e = Emitter::new(&mut buf);
         reset!(e);
-        e.mov_rm_fpreg(
+        e.mov_rm_fp(
             FP::Double,
             Scale::NoScale,
             (Reg::RAX, Reg::NoIndex, 0),
             Reg::XMM0,
         );
         check!(e, [0xf2, 0x0f, 0x11, 0x00]);
-        e.mov_fpreg_rm(
+        e.mov_fp_rm(
             FP::Double,
             Scale::NoScale,
             Reg::XMM0,
             (Reg::RAX, Reg::NoIndex, 0),
         );
         check!(e, [0xf2, 0x0f, 0x10, 0x00]);
-        e.mov_fpreg_fpreg(FP::Double, Reg::XMM0, Reg::XMM1);
+        e.mov_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1);
         check!(e, [0xf2, 0x0f, 0x10, 0xc1]);
+        e.add_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1);
+        check!(e, [0xf2, 0x0f, 0x58, 0xc1]);
+        e.mov_fp_rm(
+            FP::Double,
+            Scale::NoScale,
+            Reg::XMM0,
+            (Reg::RSP, Reg::NoIndex, 0),
+        );
+        check!(e, [0xf2, 0x0f, 0x10, 0x04, 0x24]);
     }
 }

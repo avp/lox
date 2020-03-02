@@ -3,7 +3,8 @@ mod mem;
 
 use crate::ast;
 
-use emitter::{Reg, S};
+use super::Value;
+use emitter::{Reg, Scale, FP, S};
 use mem::ExecHeap;
 
 pub struct JitContext {
@@ -19,7 +20,7 @@ impl JitContext {
         }
     }
 
-    pub fn compile(&mut self, ast: &ast::File) -> fn() -> u64 {
+    pub fn compile(&mut self, ast: &ast::File) -> fn() -> Value {
         let dump = self.dump_asm;
         let mut jit = Jit::new(self, ast);
         let result = jit.compile();
@@ -69,13 +70,15 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                 break;
             }
         }
-        let instrs = cs.disasm_count(self.e.buf, 0, count).unwrap();
-        println!("{}", instrs);
+        println!(
+            "{}",
+            cs.disasm_count(self.e.buf, 0, count).unwrap()
+        );
     }
 
-    pub fn compile(&mut self) -> fn() -> u64 {
+    pub fn compile(&mut self) -> fn() -> Value {
         use ast::*;
-        self.emit_prologue(8 * 8);
+        self.emit_prologue();
         match &(self.file.decls[0]).kind {
             DeclKind::Stmt(stmt) => match &stmt.kind {
                 StmtKind::Expr(expr) => self.compile_expr(&expr),
@@ -91,7 +94,8 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         use ast::ExprKind::*;
         match &expr.kind {
             &NumberLiteral(x) => {
-                self.e.mov_reg_imm(Reg::RAX, x as u64);
+                self.e
+                    .mov_reg_imm(Reg::RAX, Value::number(x).raw());
             }
             BinOp(op, x, y) => {
                 use ast::BinOpKind::*;
@@ -99,25 +103,57 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                 self.compile_expr(&x);
                 self.e.mov_reg_reg(S::Q, Reg::RBX, Reg::RAX);
                 self.compile_expr(&y);
+                self.fp_from_reg(FP::Double, Reg::XMM0, Reg::RBX);
+                self.fp_from_reg(FP::Double, Reg::XMM1, Reg::RAX);
                 match op {
-                    Add => self.e.add_reg_reg(S::Q, Reg::RAX, Reg::RBX),
+                    Add => self.e
+                        .add_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1),
+                    Sub => self.e
+                        .sub_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1),
+                    Mul => self.e
+                        .mul_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1),
+                    Div => self.e
+                        .div_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1),
                     _ => unimplemented!(),
                 }
+                self.reg_from_fp(FP::Double, Reg::RAX, Reg::XMM0);
                 self.e.popq(Reg::RBX);
             }
             _ => unimplemented!(),
         }
     }
 
-    fn emit_prologue(&mut self, stack_size: usize) {
-        use emitter::{Reg, S};
+    fn emit_prologue(&mut self) {
         self.e.pushq(Reg::RBP);
         self.e.mov_reg_reg(S::Q, Reg::RBP, Reg::RSP);
     }
 
     fn emit_epilogue(&mut self) {
-        use emitter::Reg;
         self.e.popq(Reg::RBP);
         self.e.ret();
+    }
+
+    fn fp_from_reg(&mut self, fp: FP, dst: Reg, src: Reg) {
+        assert!(dst.is_fp() && !src.is_fp());
+        self.e.pushq(src);
+        self.e.mov_fp_rm(
+            fp,
+            Scale::NoScale,
+            dst,
+            (Reg::RSP, Reg::NoIndex, 0),
+        );
+        self.e.popq(src);
+    }
+
+    fn reg_from_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
+        assert!(!dst.is_fp() && src.is_fp());
+        self.e.pushq(dst);
+        self.e.mov_rm_fp(
+            fp,
+            Scale::NoScale,
+            (Reg::RSP, Reg::NoIndex, 0),
+            src,
+        );
+        self.e.popq(dst);
     }
 }
