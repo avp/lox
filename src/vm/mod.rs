@@ -1,3 +1,4 @@
+mod interpreter;
 mod jit;
 mod value;
 

@@ -114,7 +114,6 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                         .mul_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1),
                     Div => self.e
                         .div_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1),
-                    _ => unimplemented!(),
                 }
                 self.reg_from_fp(FP::Double, Reg::RAX, Reg::XMM0);
                 self.e.popq(Reg::RBX);

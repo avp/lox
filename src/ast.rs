@@ -61,3 +61,10 @@ pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
 }
+
+pub trait Visitor<T> {
+    fn visit_file(&mut self, file: &File) -> T;
+    fn visit_decl(&mut self, decl: &Decl) -> T;
+    fn visit_stmt(&mut self, stmt: &Stmt) -> T;
+    fn visit_expr(&mut self, expr: &Expr) -> T;
+}
