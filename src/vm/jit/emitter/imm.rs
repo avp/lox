@@ -22,6 +22,16 @@ impl Immediate for u64 {
     }
 }
 
+impl Immediate for usize {
+    fn s() -> S {
+        if std::mem::size_of::<usize>() == 8 {
+            S::Q
+        } else {
+            S::L
+        }
+    }
+}
+
 impl Immediate for f64 {
     fn s() -> S {
         S::Q

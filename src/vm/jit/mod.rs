@@ -3,6 +3,7 @@ mod mem;
 
 use crate::ast;
 
+use super::builtins;
 use super::Value;
 use emitter::{Reg, Scale, FP, S};
 use mem::ExecHeap;
@@ -82,9 +83,17 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         match &(self.file.decls[0]).kind {
             DeclKind::Stmt(stmt) => match &stmt.kind {
                 StmtKind::Expr(expr) => self.compile_expr(&expr),
+                StmtKind::Print(expr) => {
+                    self.compile_expr(&expr);
+                    self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
+                    self.e.mov_reg_imm(
+                        Reg::RAX,
+                        builtins::addr(builtins::println),
+                    );
+                    self.e.call_reg(Reg::RAX);
+                }
                 _ => unimplemented!(),
             },
-            _ => unimplemented!(),
         };
         self.emit_epilogue();
         unsafe { std::mem::transmute(self.e.buf.as_ptr()) }
