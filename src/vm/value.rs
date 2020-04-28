@@ -65,14 +65,17 @@ mod tests {
     #[test]
     fn number() {
         let v = Value::number(1.5f64);
-        assert_eq!(v.raw(), 0x3FF8000000000000);
+        assert_eq!(v.raw(), 0x3FF8000000000000u64);
         assert_eq!(v.get_number(), 1.5f64);
+
+        let v = Value::number(2f64);
+        assert_eq!(v.get_number(), 2f64);
     }
 
     #[test]
     fn nil() {
         let v = Value::nil();
-        assert_eq!(v.raw(), 0xfff9000000000000);
+        assert_eq!(v.raw(), 0xfff9000000000000u64);
         assert_eq!(v.get_tag(), Tag::Nil);
     }
 }
