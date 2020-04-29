@@ -21,14 +21,14 @@ impl JitContext {
         }
     }
 
-    pub fn compile(&mut self, ast: &ast::File) -> fn() -> Value {
+    pub fn compile(&mut self, ast: &ast::File) -> Option<fn() -> Value> {
         let dump = self.dump_asm;
         let mut jit = Jit::new(self, ast);
-        let result = jit.compile();
+        let result = jit.compile()?;
         if dump {
             jit.dump();
         }
-        result
+        Some(result)
     }
 }
 
@@ -77,26 +77,28 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         );
     }
 
-    pub fn compile(&mut self) -> fn() -> Value {
+    pub fn compile(&mut self) -> Option<fn() -> Value> {
         use ast::*;
         self.emit_prologue();
-        match &(self.file.decls[0]).kind {
-            DeclKind::Stmt(stmt) => match &stmt.kind {
-                StmtKind::Expr(expr) => self.compile_expr(&expr),
-                StmtKind::Print(expr) => {
-                    self.compile_expr(&expr);
-                    self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
-                    self.e.mov_reg_imm(
-                        Reg::RAX,
-                        builtins::addr(builtins::println),
-                    );
-                    self.e.call_reg(Reg::RAX);
-                }
-                _ => unimplemented!(),
-            },
-        };
+        for decl in &self.file.decls {
+            match &decl.kind {
+                DeclKind::Stmt(stmt) => match &stmt.kind {
+                    StmtKind::Expr(expr) => self.compile_expr(&expr),
+                    StmtKind::Print(expr) => {
+                        self.compile_expr(&expr);
+                        self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
+                        self.e.mov_reg_imm(
+                            Reg::RAX,
+                            builtins::addr(builtins::println),
+                        );
+                        self.e.call_reg(Reg::RAX);
+                    }
+                    _ => unimplemented!(),
+                },
+            };
+        }
         self.emit_epilogue();
-        unsafe { std::mem::transmute(self.e.buf.as_ptr()) }
+        Some(unsafe { std::mem::transmute(self.e.buf.as_ptr()) })
     }
 
     fn compile_expr(&mut self, expr: &ast::Expr) {

@@ -54,8 +54,7 @@ fn run(
                 println!("{:#?}", &ast);
             }
             let mut vm = vm::VM::new(opt.dump_asm);
-            let result = vm.run(ast);
-            println!("Result: {}", result);
+            vm.run(ast);
         }
     };
 

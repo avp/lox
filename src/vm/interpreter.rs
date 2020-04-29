@@ -2,7 +2,7 @@ use crate::ast;
 use crate::ast::Visitor;
 use crate::vm::Value;
 
-struct Interpreter {}
+pub struct Interpreter {}
 
 impl Interpreter {
     pub fn new() -> Interpreter {
