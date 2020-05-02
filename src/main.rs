@@ -9,6 +9,7 @@ mod token;
 mod ast;
 mod ctx;
 mod parser;
+mod sem;
 
 mod vm;
 

@@ -7,10 +7,12 @@ pub type P<T> = Box<T>;
 pub struct File {
     pub decls: Vec<P<Decl>>,
     pub span: Span,
+    pub locals: Vec<UniqueString>,
 }
 
 #[derive(Debug)]
 pub enum DeclKind {
+    Var(UniqueString, Option<P<Expr>>),
     Stmt(P<Stmt>),
 }
 
@@ -68,4 +70,11 @@ pub trait Visitor<T> {
     fn visit_decl(&mut self, decl: &Decl) -> T;
     fn visit_stmt(&mut self, stmt: &Stmt) -> T;
     fn visit_expr(&mut self, expr: &Expr) -> T;
+}
+
+pub trait MutVisitor<'ast, T> {
+    fn visit_file(&mut self, file: &'ast mut File) -> T;
+    fn visit_decl(&mut self, decl: &'ast mut Decl) -> T;
+    fn visit_stmt(&mut self, stmt: &'ast mut Stmt) -> T;
+    fn visit_expr(&mut self, expr: &'ast mut Expr) -> T;
 }
