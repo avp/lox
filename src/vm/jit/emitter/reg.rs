@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum S {
     B,
@@ -7,12 +8,14 @@ pub enum S {
     Q,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum FP {
     Float,
     Double,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Reg {
     RAX,

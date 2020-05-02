@@ -1,8 +1,6 @@
 mod imm;
 mod reg;
 
-use byteorder::{LittleEndian, WriteBytesExt};
-
 pub use imm::Immediate;
 pub use reg::{AddrMode, Reg, FP, S};
 
@@ -20,6 +18,7 @@ pub enum Scale {
     RegScale,
 }
 
+#[allow(dead_code)]
 impl<'buf> Emitter<'buf> {
     pub fn new(buf: &'buf mut [u8]) -> Emitter {
         Emitter { buf, index: 0 }
@@ -63,11 +62,10 @@ impl<'buf> Emitter<'buf> {
         &mut self,
         s: S,
         scale: Scale,
-        mut opcode: u8,
+        opcode: u8,
         reg: Reg,
         rm: RM,
     ) {
-        let (base, index, _) = rm;
         self.emit_rex(s, rm, reg);
         self.emit(opcode);
         self.emit_mod_rm(s, scale, reg, rm);
@@ -92,15 +90,23 @@ impl<'buf> Emitter<'buf> {
                 } else {
                     let rm = base;
                     if offset == 0 {
-                        self.emit(encode_mod_rm(AddrMode::AtReg, rm, reg));
+                        self.emit(encode_mod_rm(
+                            AddrMode::AtReg,
+                            rm,
+                            reg.ord7(),
+                        ));
                     } else if offset < 0xff {
-                        self.emit(encode_mod_rm(AddrMode::AtRegDisp8, rm, reg));
+                        self.emit(encode_mod_rm(
+                            AddrMode::AtRegDisp8,
+                            rm,
+                            reg.ord7(),
+                        ));
                         self.emit(offset as u8);
                     } else {
                         self.emit(encode_mod_rm(
                             AddrMode::AtRegDisp32,
                             rm,
-                            reg,
+                            reg.ord7(),
                         ));
                         self.emit_u32(offset as u32);
                     }
@@ -108,21 +114,21 @@ impl<'buf> Emitter<'buf> {
             }
             Scale::RegScale => {
                 let rm = base;
-                self.emit(encode_mod_rm(AddrMode::Reg, rm, reg));
+                self.emit(encode_mod_rm(AddrMode::Reg, rm, reg.ord7()));
             }
             Scale::Scale(scale) => {
                 if offset == 0 {
                     self.emit(encode_mod_rm(
                         AddrMode::AtBase,
                         Reg::ModSIB,
-                        reg,
+                        reg.ord7(),
                     ));
                     self.emit(encode_sib(scale, (base, index, offset)));
                 } else if offset < 0xff {
                     self.emit(encode_mod_rm(
                         AddrMode::AtBaseDisp8,
                         Reg::ModSIB,
-                        reg,
+                        reg.ord7(),
                     ));
                     self.emit(encode_sib(scale, (base, index, offset)));
                     self.emit(offset as u8);
@@ -130,7 +136,7 @@ impl<'buf> Emitter<'buf> {
                     self.emit(encode_mod_rm(
                         AddrMode::AtBaseDisp32,
                         Reg::ModSIB,
-                        reg,
+                        reg.ord7(),
                     ));
                     self.emit(encode_sib(scale, (base, index, offset)));
                     self.emit_u32(offset as u32);
@@ -150,7 +156,7 @@ impl<'buf> Emitter<'buf> {
         self.emit_fptype(fp);
         self.emit(0x0f);
         self.emit(opcode);
-        self.emit(encode_mod_rm(AddrMode::Reg, src, dst));
+        self.emit(encode_mod_rm(AddrMode::Reg, src, dst.ord7()));
     }
 
     fn emit_fp_rm(
@@ -253,6 +259,19 @@ impl<'buf> Emitter<'buf> {
     pub fn add_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
         self.op_reg_rm(s, scale, 0x02, dst, src);
     }
+    pub fn add_reg_imm<T: Immediate>(&mut self, s: S, reg: Reg, imm: T) {
+        self.emit_rex(s, (reg, Reg::NoIndex, 0), Reg::NONE);
+        self.emit(if s == S::B { 0x80 } else { 0x81 });
+        self.emit(encode_mod_rm(AddrMode::Reg, reg, 0));
+        self.emit_imm(imm);
+    }
+
+    pub fn sub_reg_imm<T: Immediate>(&mut self, s: S, reg: Reg, imm: T) {
+        self.emit_rex(s, (reg, Reg::NoIndex, 0), Reg::NONE);
+        self.emit(if s == S::B { 0x80 } else { 0x81 });
+        self.emit(encode_mod_rm(AddrMode::Reg, reg, 5));
+        self.emit_imm(imm);
+    }
 
     pub fn add_fp_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
         assert!(dst.is_fp() && src.is_fp());
@@ -292,7 +311,7 @@ impl<'buf> Emitter<'buf> {
 /// * `mode` - The AddrMode indicating displacement and starting.
 /// * `rm` - The R/M field in the table indicating effective address.
 /// * `reg` - The REG field in the table, indicating register.
-fn encode_mod_rm(mode: AddrMode, rm: Reg, reg: Reg) -> u8 {
+fn encode_mod_rm(mode: AddrMode, rm: Reg, reg_opcode: u8) -> u8 {
     // If using SIB mode, then use 4 for RM.
     // Table 2-2 (Note 1).
     let rm = if mode.mode_sib() != 0 {
@@ -300,7 +319,7 @@ fn encode_mod_rm(mode: AddrMode, rm: Reg, reg: Reg) -> u8 {
     } else {
         rm.ord7()
     };
-    (mode.mode_mod() << 6) | ((reg.ord7()) << 3) | (rm & 0b111)
+    dbg!(mode.mode_mod() << 6) | dbg!(reg_opcode << 3) | dbg!(rm & 0b111)
 }
 
 fn log(scale: u32) -> u8 {
@@ -355,6 +374,15 @@ mod tests {
         check!(e, [0x54]);
         e.pushq(Reg::RAX);
         check!(e, [0x50]);
+    }
+
+    #[test]
+    fn sub_rsp() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.sub_reg_imm(S::Q, Reg::RSP, 0xabu8);
+        check!(e, [0x48, 0x81, 0xec, 0xab]);
     }
 
     #[test]
