@@ -1,4 +1,5 @@
 use codespan::Span;
+use crate::ctx::UniqueString;
 
 pub type P<T> = Box<T>;
 
@@ -51,9 +52,9 @@ pub enum ExprKind {
     BinOp(BinOpKind, P<Expr>, P<Expr>),
     UnOp(UnOpKind, P<Expr>),
     NumberLiteral(f64),
-    StringLiteral(String),
+    StringLiteral(UniqueString),
     BoolLiteral(bool),
-    Ident(String),
+    Ident(UniqueString),
 }
 
 #[derive(Debug)]

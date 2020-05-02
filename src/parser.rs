@@ -2,11 +2,12 @@ use codespan::Span;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 
 use crate::ast::*;
+use crate::ctx::*;
 use crate::lexer::*;
 use crate::token::*;
 
-pub struct Parser<'src> {
-    lexer: Lexer<'src>,
+pub struct Parser<'ctx, 'src> {
+    lexer: Lexer<'ctx, 'src>,
     file_id: codespan::FileId,
 }
 
@@ -28,13 +29,14 @@ impl ParseError {
     }
 }
 
-impl<'src> Parser<'src> {
+impl<'ctx, 'src> Parser<'ctx, 'src> {
     pub fn parse(
+        ctx: &'ctx mut Ctx,
         files: &codespan::Files<&'src str>,
         file_id: codespan::FileId,
     ) -> Result<P<File>> {
         let mut parser = Parser {
-            lexer: Lexer::new(files.source(file_id)),
+            lexer: Lexer::new(ctx, files.source(file_id)),
             file_id,
         };
         parser.lexer.advance();

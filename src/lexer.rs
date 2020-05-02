@@ -1,23 +1,27 @@
+use crate::ctx::*;
 use crate::token::{Token, TokenKind};
 
 use codespan::{ByteIndex, Span};
 use std::iter::Peekable;
 use std::str::CharIndices;
 
-#[derive(Debug)]
-pub struct Lexer<'src> {
+pub struct Lexer<'ctx, 'src> {
+    ctx: &'ctx mut Ctx,
     it: Peekable<CharIndices<'src>>,
     len: u32,
     pub token: Token,
+    buf: String,
 }
 
-impl<'src> Lexer<'src> {
-    pub fn new(text: &'src str) -> Lexer {
+impl<'ctx, 'src> Lexer<'ctx, 'src> {
+    pub fn new(ctx: &'ctx mut Ctx, text: &'src str) -> Lexer<'ctx, 'src> {
         let len = text.len() as u32;
         Lexer {
+            ctx,
             it: text.char_indices().peekable(),
             len,
             token: Token::new(TokenKind::Empty, Span::initial()),
+            buf: String::new(),
         }
     }
 
@@ -54,53 +58,58 @@ impl<'src> Lexer<'src> {
 
     fn scan_ident(&mut self) -> Token {
         assert!(start_ident(self.peek()));
-        let mut ident = String::new();
         let (start, c) = self.next();
-        ident.push(c);
+        self.buf.clear();
+        self.buf.push(c);
         let mut end = start;
         loop {
             let c = self.peek();
             if !mid_ident(c) {
                 let span = Span::new(start, end);
-                return match Token::res_word(&ident, span) {
-                    None => Token::ident(ident, span),
+                return match Token::res_word(&self.buf, span) {
+                    None => {
+                        Token::ident(self.ctx.unique_string(&self.buf), span)
+                    }
                     Some(t) => t,
                 };
             }
             end = self.next().0;
-            ident.push(c);
+            self.buf.push(c);
         }
     }
 
     fn scan_str(&mut self) -> Token {
         assert_eq!(self.peek(), '"');
-        let mut string = String::new();
         let (start, _) = self.next();
+        self.buf.clear();
         loop {
             let c = self.peek();
             if c == '"' {
                 let (end, _) = self.next();
-                return Token::string(string, Span::new(start, end));
+                return Token::string(
+                    self.ctx.unique_string(&self.buf),
+                    Span::new(start, end),
+                );
             }
             self.next();
             match c {
                 '\\' => match self.peek() {
                     '"' => {
-                        string.push('"');
+                        self.buf.push('"');
                         self.next();
                     }
                     '\\' => {
-                        string.push('\\');
+                        self.buf.push('\\');
                         self.next();
                     }
                     'n' => {
-                        string.push('\n');
+                        self.buf.push('\n');
                         self.next();
                     }
                     _ => {}
                 },
                 _ => {
-                    string.push(c);
+                    self.buf.push(c);
                 }
             };
         }
@@ -200,8 +209,9 @@ mod tests {
 
     #[test]
     fn smoke() {
+        let mut ctx = Ctx::new();
         let src: &'static str = "1 { } ( ) > >= < <=";
-        let mut lex = Lexer::new(src);
+        let mut lex = Lexer::new(&mut ctx, src);
         assert_eq!(NumberLiteral, advance(&mut lex).kind);
         assert_eq!(Some(1f64), lex.token.number);
         assert_eq!(LBrace, advance(&mut lex).kind);
@@ -216,8 +226,9 @@ mod tests {
 
     #[test]
     fn res_word() {
+        let mut ctx = Ctx::new();
         let src: &'static str = "true false";
-        let mut lex = Lexer::new(src);
+        let mut lex = Lexer::new(&mut ctx, src);
         assert_eq!(ResWord(True), advance(&mut lex).kind);
         assert_eq!(ResWord(False), advance(&mut lex).kind);
     }

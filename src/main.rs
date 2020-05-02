@@ -1,3 +1,5 @@
+#![feature(or_insert_with_key)]
+
 #[macro_use]
 extern crate failure;
 
@@ -5,6 +7,7 @@ mod lexer;
 mod token;
 
 mod ast;
+mod ctx;
 mod parser;
 
 mod vm;
@@ -13,6 +16,8 @@ use clap::Clap;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
+
+use ctx::Ctx;
 
 #[derive(Debug, Clap)]
 #[clap(name = "lox")]
@@ -35,15 +40,16 @@ fn run(
     files: &codespan::Files<&str>,
     file_id: codespan::FileId,
 ) -> Result<(), failure::Error> {
+    let mut ctx: Ctx = Ctx::new();
     if opt.dump_tokens {
-        let mut lexer = lexer::Lexer::new(files.source(file_id));
+        let mut lexer = lexer::Lexer::new(&mut ctx, files.source(file_id));
         while lexer.token.kind != token::TokenKind::Eof {
             lexer.advance();
             println!("{:?}", lexer.token);
         }
     }
 
-    let ast_res = parser::Parser::parse(&files, file_id);
+    let ast_res = parser::Parser::parse(&mut ctx, &files, file_id);
     match ast_res {
         Err(err) => {
             err.emit(&files);

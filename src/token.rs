@@ -1,10 +1,12 @@
+use crate::ctx::UniqueString;
+
 use codespan::Span;
 
 #[derive(Debug, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
-    pub string: Option<String>,
+    pub string: Option<UniqueString>,
     pub number: Option<f64>,
 }
 
@@ -110,7 +112,7 @@ impl Token {
         }
     }
 
-    pub fn string(string: String, span: Span) -> Token {
+    pub fn string(string: UniqueString, span: Span) -> Token {
         Token {
             kind: TokenKind::StringLiteral,
             span,
@@ -119,7 +121,7 @@ impl Token {
         }
     }
 
-    pub fn ident(string: String, span: Span) -> Token {
+    pub fn ident(string: UniqueString, span: Span) -> Token {
         Token {
             kind: TokenKind::Ident,
             span,
