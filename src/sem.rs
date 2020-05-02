@@ -5,12 +5,9 @@ pub struct SemanticValidator<'ast> {
 }
 
 impl<'ast> SemanticValidator<'ast> {
-    pub fn new() -> SemanticValidator<'ast> {
-        SemanticValidator { file: None }
-    }
-
-    pub fn run(&mut self, file: &'ast mut File) {
-        self.visit_file(file);
+    pub fn run(file: &'ast mut File) {
+        let mut sem = SemanticValidator { file: None };
+        sem.visit_file(file);
     }
 }
 
