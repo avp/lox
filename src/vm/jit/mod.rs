@@ -95,6 +95,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                     }
                     _ => unimplemented!(),
                 },
+                DeclKind::Var(_, _) => unimplemented!(),
             };
         }
         self.emit_epilogue();

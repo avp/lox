@@ -36,6 +36,7 @@ impl ast::Visitor<InterpResult> for Interpreter {
     fn visit_decl(&mut self, decl: &ast::Decl) -> InterpResult {
         match &decl.kind {
             ast::DeclKind::Stmt(s) => self.visit_stmt(&s),
+            ast::DeclKind::Var(_, _) => unimplemented!(),
         }
     }
 

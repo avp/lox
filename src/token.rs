@@ -91,6 +91,7 @@ pub enum ResWord {
     False,
     Return,
     Print,
+    Var,
 }
 
 impl Token {
@@ -137,6 +138,7 @@ impl Token {
                 "false" => TokenKind::ResWord(ResWord::False),
                 "return" => TokenKind::ResWord(ResWord::Return),
                 "print" => TokenKind::ResWord(ResWord::Print),
+                "var" => TokenKind::ResWord(ResWord::Var),
                 _ => return None,
             },
             span,
@@ -150,5 +152,9 @@ impl Token {
             TokenKind::ResWord(_) => true,
             _ => false,
         }
+    }
+
+    pub fn get_string(&self) -> UniqueString {
+        self.string.clone().unwrap()
     }
 }

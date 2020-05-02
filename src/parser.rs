@@ -73,6 +73,14 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
         }
     }
 
+    fn need(&mut self, kind: TokenKind) -> Result<()> {
+        if self.lexer.token.kind == kind {
+            Ok(())
+        } else {
+            Err(self.expected(kind))
+        }
+    }
+
     fn eat(&mut self, kind: TokenKind) -> Result<()> {
         if self.lexer.token.kind == kind {
             self.lexer.advance();
@@ -99,12 +107,32 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
     }
 
     fn parse_decl(&mut self) -> Result<P<Decl>> {
-        let stmt = self.parse_stmt()?;
-        let span = stmt.span;
-        Ok(P::new(Decl {
-            kind: DeclKind::Stmt(stmt),
-            span,
-        }))
+        let start = self.lexer.token.span;
+        if self.check_eat(TokenKind::ResWord(ResWord::Var)) {
+            self.need(TokenKind::Ident)?;
+            let ident = self.lexer.token.get_string();
+            let mut span = start.merge(self.lexer.token.span);
+            self.lexer.advance();
+            let expr = if self.check_eat(TokenKind::Equal) {
+                let expr: P<Expr> = self.parse_expr()?;
+                span = start.merge(expr.span);
+                Some(expr)
+            } else {
+                None
+            };
+            self.eat(TokenKind::Semi)?;
+            Ok(P::new(Decl {
+                kind: DeclKind::Var(ident, expr),
+                span,
+            }))
+        } else {
+            let stmt = self.parse_stmt()?;
+            let span = stmt.span;
+            Ok(P::new(Decl {
+                kind: DeclKind::Stmt(stmt),
+                span,
+            }))
+        }
     }
 
     fn parse_stmt(&mut self) -> Result<P<Stmt>> {
