@@ -7,7 +7,6 @@ pub type P<T> = Box<T>;
 pub struct File {
     pub decls: Vec<P<Decl>>,
     pub span: Span,
-    pub locals: Vec<UniqueString>,
 }
 
 #[derive(Debug)]
@@ -65,11 +64,11 @@ pub struct Expr {
     pub span: Span,
 }
 
-pub trait Visitor<T> {
-    fn visit_file(&mut self, file: &File) -> T;
-    fn visit_decl(&mut self, decl: &Decl) -> T;
-    fn visit_stmt(&mut self, stmt: &Stmt) -> T;
-    fn visit_expr(&mut self, expr: &Expr) -> T;
+pub trait Visitor<'ast, T> {
+    fn visit_file(&mut self, file: &'ast File) -> T;
+    fn visit_decl(&mut self, decl: &'ast Decl) -> T;
+    fn visit_stmt(&mut self, stmt: &'ast Stmt) -> T;
+    fn visit_expr(&mut self, expr: &'ast Expr) -> T;
 }
 
 pub trait MutVisitor<'ast, T> {

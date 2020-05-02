@@ -1,5 +1,6 @@
 use crate::ast;
 use crate::ast::Visitor;
+use crate::sem::SemInfo;
 use crate::vm::Value;
 
 pub struct Interpreter {}
@@ -9,7 +10,7 @@ impl Interpreter {
         Interpreter {}
     }
 
-    pub fn run(&mut self, file: &ast::File) -> Value {
+    pub fn run(&mut self, file: &ast::File, sem: &SemInfo) -> Value {
         match self.visit_file(file) {
             Ok(v) => v,
             Err(v) => v,
@@ -19,7 +20,7 @@ impl Interpreter {
 
 type InterpResult = std::result::Result<Value, Value>;
 
-impl ast::Visitor<InterpResult> for Interpreter {
+impl<'ast> ast::Visitor<'ast, InterpResult> for Interpreter {
     fn visit_file(&mut self, file: &ast::File) -> InterpResult {
         let mut result = Value::number(0f64);
         for decl in &file.decls {

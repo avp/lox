@@ -99,11 +99,7 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
             Some(d) => d.span.merge(decls.last().unwrap().span),
             None => Span::initial(),
         };
-        Ok(P::new(File {
-            decls,
-            span,
-            locals: vec![],
-        }))
+        Ok(P::new(File { decls, span }))
     }
 
     fn parse_decl(&mut self) -> Result<P<Decl>> {

@@ -147,13 +147,6 @@ impl Token {
         })
     }
 
-    pub fn is_res_word(&self) -> bool {
-        match self.kind {
-            TokenKind::ResWord(_) => true,
-            _ => false,
-        }
-    }
-
     pub fn get_string(&self) -> UniqueString {
         self.string.clone().unwrap()
     }

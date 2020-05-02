@@ -60,9 +60,9 @@ fn run(
             if opt.dump_ast {
                 println!("{:#?}", &ast);
             }
-            sem::SemanticValidator::run(ast.as_mut());
+            let sem = sem::SemanticValidator::run(ast.as_ref());
             let mut vm = vm::VM::new(opt.dump_asm);
-            vm.run(ast);
+            vm.run(ast, &sem);
         }
     };
 

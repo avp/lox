@@ -2,11 +2,14 @@ mod emitter;
 mod mem;
 
 use crate::ast;
+use crate::ctx::UniqueString;
+use crate::sem::SemInfo;
 
 use super::builtins;
 use super::Value;
 use emitter::{Reg, Scale, FP, S};
 use mem::ExecHeap;
+use std::ops::{Add, BitAnd, Not, Sub};
 
 pub struct JitContext {
     heap: ExecHeap,
@@ -21,9 +24,13 @@ impl JitContext {
         }
     }
 
-    pub fn compile(&mut self, ast: &ast::File) -> Option<fn() -> Value> {
+    pub fn compile(
+        &mut self,
+        ast: &ast::File,
+        sem: &SemInfo,
+    ) -> Option<fn() -> Value> {
         let dump = self.dump_asm;
-        let mut jit = Jit::new(self, ast);
+        let mut jit = Jit::new(self, ast, sem);
         let result = jit.compile()?;
         if dump {
             jit.dump();
@@ -38,18 +45,21 @@ struct Jit<'ctx, 'ast> {
     ctx: &'ctx JitContext,
     e: emitter::Emitter<'ctx>,
     file: &'ast ast::File,
+    sem: &'ast SemInfo,
 }
 
 impl<'ctx, 'ast> Jit<'_, '_> {
     fn new(
         ctx: &'ctx mut JitContext,
         file: &'ast ast::File,
+        sem: &'ast SemInfo,
     ) -> Jit<'ctx, 'ast> {
         let buf: &'ctx mut [u8] = (&mut ctx.heap).alloc(4096);
         Jit {
             ctx: &*ctx,
             e: emitter::Emitter::new(&mut *buf),
             file,
+            sem,
         }
     }
 
@@ -95,7 +105,26 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                     }
                     _ => unimplemented!(),
                 },
-                DeclKind::Var(_, _) => unimplemented!(),
+                DeclKind::Var(name, expr) => {
+                    let disp = self.local_disp(name);
+                    if let Some(e) = expr {
+                        self.compile_expr(&e);
+                        self.e.mov_rm_reg(
+                            S::Q,
+                            Scale::NoScale,
+                            (Reg::RBP, Reg::NoIndex, disp),
+                            Reg::RAX,
+                        );
+                    } else {
+                        self.e.mov_reg_imm(Reg::RAX, Value::nil().raw());
+                        self.e.mov_rm_reg(
+                            S::Q,
+                            Scale::NoScale,
+                            (Reg::RBP, Reg::NoIndex, disp),
+                            Reg::RAX,
+                        );
+                    }
+                }
             };
         }
         self.emit_epilogue();
@@ -130,17 +159,46 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                 self.reg_from_fp(FP::Double, Reg::RAX, Reg::XMM0);
                 self.e.popq(Reg::RBX);
             }
+            Ident(name) => {
+                let disp = self.local_disp(&name);
+                self.e.mov_reg_rm(
+                    S::Q,
+                    Scale::NoScale,
+                    Reg::RAX,
+                    (Reg::RBP, Reg::NoIndex, disp),
+                );
+            }
             _ => unimplemented!(),
         }
+    }
+
+    fn num_locals(&self) -> u32 {
+        self.sem.vars.len() as u32
+    }
+
+    fn local_disp(&self, name: &UniqueString) -> i32 {
+        for i in 0..self.num_locals() {
+            if &self.sem.vars[i as usize] == name {
+                return (i + 1) as i32 * -8;
+            }
+        }
+        unreachable!("Invalid local");
     }
 
     fn emit_prologue(&mut self) {
         self.e.pushq(Reg::RBP);
         self.e.mov_reg_reg(S::Q, Reg::RBP, Reg::RSP);
+        if self.num_locals() > 0 {
+            self.e.sub_reg_imm(
+                S::Q,
+                Reg::RSP,
+                align(self.num_locals() * 8, 16),
+            );
+        }
     }
 
     fn emit_epilogue(&mut self) {
-        self.e.popq(Reg::RBP);
+        self.e.leave();
         self.e.ret();
     }
 
@@ -167,4 +225,8 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         );
         self.e.popq(dst);
     }
+}
+
+fn align(x: u32, to: u32) -> u32 {
+    (x + (to - 1)) & !(to - 1)
 }

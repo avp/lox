@@ -6,6 +6,7 @@ mod value;
 pub use value::Value;
 
 use crate::ast;
+use crate::sem::SemInfo;
 use jit::JitContext;
 
 /// VM can execute a given AST.
@@ -24,11 +25,11 @@ impl VM {
         }
     }
 
-    pub fn run(&mut self, ast: ast::P<ast::File>) -> Value {
-        let fun_opt = self.jit.compile(&ast);
+    pub fn run(&mut self, ast: ast::P<ast::File>, sem: &SemInfo) -> Value {
+        let fun_opt = self.jit.compile(&ast, sem);
         match fun_opt {
             Some(fun) => fun(),
-            _ => self.interp.run(&ast),
+            _ => self.interp.run(&ast, sem),
         }
     }
 }

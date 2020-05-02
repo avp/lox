@@ -95,13 +95,13 @@ impl<'buf> Emitter<'buf> {
                             rm,
                             reg.ord7(),
                         ));
-                    } else if offset < 0xff {
+                    } else if offset as u8 as i8 as i32 == offset {
                         self.emit(encode_mod_rm(
                             AddrMode::AtRegDisp8,
                             rm,
                             reg.ord7(),
                         ));
-                        self.emit(offset as u8);
+                        self.emit(offset as i8 as u8);
                     } else {
                         self.emit(encode_mod_rm(
                             AddrMode::AtRegDisp32,
@@ -319,7 +319,7 @@ fn encode_mod_rm(mode: AddrMode, rm: Reg, reg_opcode: u8) -> u8 {
     } else {
         rm.ord7()
     };
-    dbg!(mode.mode_mod() << 6) | dbg!(reg_opcode << 3) | dbg!(rm & 0b111)
+    (mode.mode_mod() << 6) | (reg_opcode << 3) | (rm & 0b111)
 }
 
 fn log(scale: u32) -> u8 {
@@ -418,6 +418,34 @@ mod tests {
             Reg::RDX,
         );
         check!(e, [0x48, 0x89, 0x11]);
+        e.mov_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (Reg::RCX, Reg::NoIndex, 0xabcd),
+            Reg::RAX,
+        );
+        check!(e, [0x48, 0x89, 0x81, 0xcd, 0xab, 0x00, 0x00]);
+        e.mov_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (Reg::RCX, Reg::NoIndex, -0xabcd),
+            Reg::RAX,
+        );
+        check!(e, [0x48, 0x89, 0x81, 0x33, 0x54, 0xff, 0xff]);
+        e.mov_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (Reg::RCX, Reg::NoIndex, -0xabcd),
+            Reg::RAX,
+        );
+        check!(e, [0x48, 0x89, 0x81, 0x33, 0x54, 0xff, 0xff]);
+        e.mov_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (Reg::RBP, Reg::NoIndex, -0x8),
+            Reg::RAX,
+        );
+        check!(e, [0x48, 0x89, 0x45, 0xf8]);
         e.mov_reg_reg(S::Q, Reg::RCX, Reg::RDX);
         check!(e, [0x48, 0x89, 0xd1]);
         e.mov_reg_imm(Reg::RCX, 0xaabbccddeeffu64);
