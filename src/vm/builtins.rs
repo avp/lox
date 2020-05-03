@@ -1,6 +1,8 @@
 use crate::vm::Value;
 
-pub fn addr(f: extern "C" fn(Value) -> Value) -> usize {
+pub type BuiltinFunc = extern "C" fn(Value) -> Value;
+
+pub fn addr(f: BuiltinFunc) -> usize {
     unsafe { std::mem::transmute(f as *const u8) }
 }
 

@@ -1,0 +1,6 @@
+// RUN: @lox @file
+
+print true;
+// CHECK: true
+print false;
+// CHECK: false

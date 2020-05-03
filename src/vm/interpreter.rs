@@ -97,6 +97,10 @@ impl<'ast> ast::Visitor<'ast> for Interpreter<'ast> {
                         UnOpKind::Not => unimplemented!(),
                     }),
                     Tag::Nil => Value::nil(),
+                    Tag::Bool => match op {
+                        UnOpKind::Neg => unimplemented!(),
+                        UnOpKind::Not => Value::bool(!val.get_bool()),
+                    },
                 };
                 Ok(result)
             }

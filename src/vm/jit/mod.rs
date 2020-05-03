@@ -98,11 +98,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                     StmtKind::Print(expr) => {
                         self.compile_expr(&expr);
                         self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
-                        self.e.mov_reg_imm(
-                            Reg::RAX,
-                            builtins::addr(builtins::println),
-                        );
-                        self.e.call_reg(Reg::RAX);
+                        self.call_builtin(builtins::println);
                     }
                     _ => unimplemented!(),
                 },
@@ -149,6 +145,10 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                 }
                 _ => unreachable!("invalid ast"),
             },
+            &BoolLiteral(b) => {
+                self.e
+                    .mov_reg_imm(Reg::RAX, Value::bool(b).raw());
+            }
             &NumberLiteral(x) => {
                 self.e
                     .mov_reg_imm(Reg::RAX, Value::number(x).raw());
@@ -244,6 +244,12 @@ impl<'ctx, 'ast> Jit<'_, '_> {
             src,
         );
         self.e.popq(dst);
+    }
+
+    fn call_builtin(&mut self, func: builtins::BuiltinFunc) {
+        self.e
+            .mov_reg_imm(Reg::RAX, builtins::addr(func));
+        self.e.call_reg(Reg::RAX);
     }
 }
 
