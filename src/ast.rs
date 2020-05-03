@@ -1,12 +1,25 @@
-use codespan::Span;
+use codespan::{FileId, Span};
 use crate::ctx::UniqueString;
 
 pub type P<T> = Box<T>;
 
+pub trait ASTNode<'ast> {
+    fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>);
+}
+
 #[derive(Debug)]
 pub struct File {
     pub decls: Vec<P<Decl>>,
+    pub id: FileId,
     pub span: Span,
+}
+
+impl<'ast> ASTNode<'ast> for File {
+    fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>) {
+        for decl in &self.decls {
+            v.visit_decl(decl);
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -21,6 +34,20 @@ pub struct Decl {
     pub span: Span,
 }
 
+impl<'ast> ASTNode<'ast> for Decl {
+    fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>) {
+        match &self.kind {
+            DeclKind::Stmt(stmt) => {
+                v.visit_stmt(stmt);
+            }
+            DeclKind::Var(_, Some(expr)) => {
+                v.visit_expr(expr);
+            }
+            _ => {}
+        };
+    }
+}
+
 #[derive(Debug)]
 pub enum StmtKind {
     Expr(P<Expr>),
@@ -32,6 +59,22 @@ pub enum StmtKind {
 pub struct Stmt {
     pub kind: StmtKind,
     pub span: Span,
+}
+
+impl<'ast> ASTNode<'ast> for Stmt {
+    fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>) {
+        match &self.kind {
+            StmtKind::Expr(expr) => {
+                v.visit_expr(expr);
+            }
+            StmtKind::Return(expr) => {
+                v.visit_expr(expr);
+            }
+            StmtKind::Print(expr) => {
+                v.visit_expr(expr);
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
@@ -50,6 +93,7 @@ pub enum UnOpKind {
 
 #[derive(Debug)]
 pub enum ExprKind {
+    Assign(P<Expr>, P<Expr>),
     BinOp(BinOpKind, P<Expr>, P<Expr>),
     UnOp(UnOpKind, P<Expr>),
     NumberLiteral(f64),
@@ -64,16 +108,32 @@ pub struct Expr {
     pub span: Span,
 }
 
-pub trait Visitor<'ast, T> {
-    fn visit_file(&mut self, file: &'ast File) -> T;
-    fn visit_decl(&mut self, decl: &'ast Decl) -> T;
-    fn visit_stmt(&mut self, stmt: &'ast Stmt) -> T;
-    fn visit_expr(&mut self, expr: &'ast Expr) -> T;
+impl<'ast> ASTNode<'ast> for Expr {
+    fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>) {
+        match &self.kind {
+            ExprKind::Assign(e1, e2) => {
+                v.visit_expr(e1);
+                v.visit_expr(e2);
+            }
+            ExprKind::BinOp(_, e1, e2) => {
+                v.visit_expr(e1);
+                v.visit_expr(e2);
+            }
+            ExprKind::UnOp(_, e) => {
+                v.visit_expr(e);
+            }
+            ExprKind::NumberLiteral(_) => {}
+            ExprKind::StringLiteral(_) => {}
+            ExprKind::BoolLiteral(_) => {}
+            ExprKind::Ident(_) => {}
+        }
+    }
 }
 
-pub trait MutVisitor<'ast, T> {
-    fn visit_file(&mut self, file: &'ast mut File) -> T;
-    fn visit_decl(&mut self, decl: &'ast mut Decl) -> T;
-    fn visit_stmt(&mut self, stmt: &'ast mut Stmt) -> T;
-    fn visit_expr(&mut self, expr: &'ast mut Expr) -> T;
+pub trait Visitor<'ast> {
+    type Output;
+    fn visit_file(&mut self, file: &'ast File) -> Self::Output;
+    fn visit_decl(&mut self, decl: &'ast Decl) -> Self::Output;
+    fn visit_stmt(&mut self, stmt: &'ast Stmt) -> Self::Output;
+    fn visit_expr(&mut self, expr: &'ast Expr) -> Self::Output;
 }

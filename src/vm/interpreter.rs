@@ -20,7 +20,8 @@ impl Interpreter {
 
 type InterpResult = std::result::Result<Value, Value>;
 
-impl<'ast> ast::Visitor<'ast, InterpResult> for Interpreter {
+impl<'ast> ast::Visitor<'ast> for Interpreter {
+    type Output = InterpResult;
     fn visit_file(&mut self, file: &ast::File) -> InterpResult {
         let mut result = Value::number(0f64);
         for decl in &file.decls {

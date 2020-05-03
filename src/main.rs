@@ -56,13 +56,22 @@ fn run(
             err.emit(&files);
             return Err(format_err!("Parsing failed"));
         }
-        Ok(mut ast) => {
+        Ok(ast) => {
             if opt.dump_ast {
                 println!("{:#?}", &ast);
             }
-            let sem = sem::SemanticValidator::run(ast.as_ref());
-            let mut vm = vm::VM::new(opt.dump_asm);
-            vm.run(ast, &sem);
+            match sem::SemanticValidator::run(&ast) {
+                Err(err) => {
+                    for e in err {
+                        e.emit(&files);
+                    }
+                    return Err(format_err!("Validation failed"));
+                }
+                Ok(sem) => {
+                    let mut vm = vm::VM::new(opt.dump_asm);
+                    vm.run(ast, &sem);
+                }
+            }
         }
     };
 

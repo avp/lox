@@ -65,7 +65,7 @@ impl<'ctx, 'src> Lexer<'ctx, 'src> {
         loop {
             let c = self.peek();
             if !mid_ident(c) {
-                let span = Span::new(start, end);
+                let span = Span::new(start, end + 1.into());
                 return match Token::res_word(&self.buf, span) {
                     None => {
                         Token::ident(self.ctx.unique_string(&self.buf), span)
@@ -88,7 +88,7 @@ impl<'ctx, 'src> Lexer<'ctx, 'src> {
                 let (end, _) = self.next();
                 return Token::string(
                     self.ctx.unique_string(&self.buf),
-                    Span::new(start, end),
+                    Span::new(start, end + 1.into()),
                 );
             }
             self.next();
@@ -119,7 +119,10 @@ impl<'ctx, 'src> Lexer<'ctx, 'src> {
         macro_rules! token_1 {
             ($k:ident) => {{
                 let (start, _) = self.next();
-                self.token = Token::new(TokenKind::$k, Span::new(start, start));
+                self.token = Token::new(
+                    TokenKind::$k,
+                    Span::new(start, start + 1.into()),
+                );
             }};
         }
 
@@ -128,9 +131,15 @@ impl<'ctx, 'src> Lexer<'ctx, 'src> {
                 let (start, _) = self.next();
                 self.token = if self.peek() == $next {
                     let (end, _) = self.next();
-                    Token::new(TokenKind::$kind2, Span::new(start, end))
+                    Token::new(
+                        TokenKind::$kind2,
+                        Span::new(start, end + 1.into()),
+                    )
                 } else {
-                    Token::new(TokenKind::$kind1, Span::new(start, start))
+                    Token::new(
+                        TokenKind::$kind1,
+                        Span::new(start, start + 1.into()),
+                    )
                 }
             }};
         }

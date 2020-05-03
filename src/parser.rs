@@ -99,7 +99,11 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
             Some(d) => d.span.merge(decls.last().unwrap().span),
             None => Span::initial(),
         };
-        Ok(P::new(File { decls, span }))
+        Ok(P::new(File {
+            decls,
+            id: self.file_id,
+            span,
+        }))
     }
 
     fn parse_decl(&mut self) -> Result<P<Decl>> {
@@ -161,7 +165,17 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
     }
 
     fn parse_expr(&mut self) -> Result<P<Expr>> {
-        Ok(self.parse_binary()?)
+        let left = self.parse_binary()?;
+        if self.check_eat(TokenKind::Equal) {
+            let right = self.parse_expr()?;
+            let span = left.span.merge(right.span);
+            Ok(P::new(Expr {
+                kind: ExprKind::Assign(left, right),
+                span,
+            }))
+        } else {
+            Ok(left)
+        }
     }
 
     fn parse_binary(&mut self) -> Result<P<Expr>> {

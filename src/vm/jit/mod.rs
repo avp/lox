@@ -134,6 +134,19 @@ impl<'ctx, 'ast> Jit<'_, '_> {
     fn compile_expr(&mut self, expr: &ast::Expr) {
         use ast::ExprKind::*;
         match &expr.kind {
+            Assign(left, right) => match &left.kind {
+                Ident(name) => {
+                    let disp = self.local_disp(&name);
+                    self.compile_expr(&right);
+                    self.e.mov_rm_reg(
+                        S::Q,
+                        Scale::NoScale,
+                        (Reg::RBP, Reg::NoIndex, disp),
+                        Reg::RAX,
+                    );
+                }
+                _ => unreachable!("invalid ast"),
+            },
             &NumberLiteral(x) => {
                 self.e
                     .mov_reg_imm(Reg::RAX, Value::number(x).raw());
