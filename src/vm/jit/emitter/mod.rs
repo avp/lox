@@ -273,6 +273,13 @@ impl<'buf> Emitter<'buf> {
         self.emit_imm(imm);
     }
 
+    pub fn cmp_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
+        self.op_reg_rm(s, scale, 0x3a, dst, src);
+    }
+    pub fn cmp_rm_reg(&mut self, s: S, scale: Scale, dst: RM, src: Reg) {
+        self.op_reg_rm(s, scale, 0x38, src, dst);
+    }
+
     pub fn add_fp_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
         assert!(dst.is_fp() && src.is_fp());
         self.emit_fp_fp(fp, 0x58, dst, src);
@@ -359,6 +366,26 @@ mod tests {
             let len = expected.len();
             assert_eq!($emit.buf[0..len], expected);
             assert_eq!($emit.buf[len], 0xff);
+            reset!($emit);
+        }};
+    }
+
+    macro_rules! check_str {
+        ($emit:expr, $str:expr) => {{
+            use capstone::arch::x86::*;
+            use capstone::arch::*;
+            use capstone::*;
+            let cs = Capstone::new()
+                .x86()
+                .mode(ArchMode::Mode64)
+                .detail(false)
+                .build()
+                .unwrap();
+            let asm = format!("{}", cs.disasm_count($emit.buf, 0, 1).unwrap());
+            assert!(
+                asm.trim().ends_with($str),
+                format!("Found: {}", asm)
+            );
             reset!($emit);
         }};
     }
@@ -462,6 +489,27 @@ mod tests {
         reset!(e);
         e.add_reg_reg(S::Q, Reg::RCX, Reg::RDX);
         check!(e, [0x48, 0x01, 0xd1]);
+    }
+
+    #[test]
+    fn cmp() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.cmp_reg_rm(
+            S::Q,
+            Scale::NoScale,
+            Reg::RAX,
+            (Reg::RBX, Reg::NoIndex, 0),
+        );
+        check_str!(e, "cmp rax, qword ptr [rbx]");
+        e.cmp_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (Reg::RBX, Reg::NoIndex, 0),
+            Reg::RAX,
+        );
+        check_str!(e, "cmp qword ptr [rbx], rax");
     }
 
     #[test]
