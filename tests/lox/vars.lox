@@ -1,0 +1,11 @@
+// RUN: @lox @file
+
+var x = 2;
+var y = 3;
+y = x + y;
+print x;
+// CHECK: 2
+print y;
+// CHECK: 5
+print x + y;
+// CHECK: 7

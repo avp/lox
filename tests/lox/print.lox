@@ -1,0 +1,4 @@
+// RUN: @lox @file
+
+print 1;
+// CHECK: 1
