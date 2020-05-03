@@ -88,6 +88,8 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         );
     }
 
+    const NUM_SCRATCH_SLOTS: u32 = 1;
+
     pub fn compile(&mut self) -> Option<fn() -> Value> {
         use ast::*;
         self.emit_prologue();
@@ -154,16 +156,21 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                     .mov_reg_imm(Reg::RAX, Value::number(x).raw());
             }
             BinOp(op, x, y) => {
-                // Use rcx as temporary storage (consider it "caller-saved"
+                // Use rbx as temporary storage (consider it "callee-saved"
                 // in some sense).
-                // xmm0 <- x
-                // xmm1 <- y
+                // xmm0 <- to_number(x)
+                // xmm1 <- to_number(y)
                 // op xmm0, xmm1
                 use ast::BinOpKind::*;
                 self.compile_expr(&x);
-                self.e.mov_reg_reg(S::Q, Reg::RCX, Reg::RAX);
+                // self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
+                // self.call_builtin(builtins::to_number);
+                self.e.pushq(Reg::RAX);
                 self.compile_expr(&y);
-                self.fp_from_reg(FP::Double, Reg::XMM0, Reg::RCX);
+                // self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
+                // self.call_builtin(builtins::to_number);
+                self.e.popq(Reg::RBX);
+                self.fp_from_reg(FP::Double, Reg::XMM0, Reg::RBX);
                 self.fp_from_reg(FP::Double, Reg::XMM1, Reg::RAX);
                 match op {
                     Add => self.e
@@ -194,12 +201,17 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         self.sem.vars.len() as u32
     }
 
+    fn scratch_disp(&self, slot: u32) -> i32 {
+        // Go one below because the stack grows up.
+        (slot as i32 + 1) * -8
+    }
+
     /// Return the offset from rbp at which the variable called `name`
     /// can be found. This is a negative integer, and multiple of 8.
     fn var_disp(&self, name: &UniqueString) -> i32 {
         let slot = self.sem.find_var(name).unwrap() as i32;
-        // Slot 0 is at [rbp-8] because the stack grows up.
-        (slot + 1) * -8
+        // Go one below because the stack grows up.
+        ((Self::NUM_SCRATCH_SLOTS as i32 + slot) + 1) * -8
     }
 
     fn emit_prologue(&mut self) {
@@ -211,10 +223,14 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         // We pushed rbp manually, and the return address was pushed
         // as part of the call to get into this code, so we're aligned
         // prior to subtracting for variable space.
-        if self.num_vars() > 0 {
-            self.e
-                .sub_reg_imm(S::Q, Reg::RSP, align(self.num_vars() * 8, 16));
-        }
+        self.e.sub_reg_imm(
+            S::Q,
+            Reg::RSP,
+            align(
+                (Self::NUM_SCRATCH_SLOTS + self.num_vars()) * 8,
+                16,
+            ),
+        );
     }
 
     fn emit_epilogue(&mut self) {
@@ -224,26 +240,16 @@ impl<'ctx, 'ast> Jit<'_, '_> {
 
     fn fp_from_reg(&mut self, fp: FP, dst: Reg, src: Reg) {
         assert!(dst.is_fp() && !src.is_fp());
-        self.e.pushq(src);
-        self.e.mov_fp_rm(
-            fp,
-            Scale::NoScale,
-            dst,
-            (Reg::RSP, Reg::NoIndex, 0),
-        );
-        self.e.popq(src);
+        let rm = (Reg::RBP, Reg::NoIndex, self.scratch_disp(0));
+        self.e.mov_rm_reg(S::Q, Scale::NoScale, rm, src);
+        self.e.mov_fp_rm(fp, Scale::NoScale, dst, rm);
     }
 
     fn reg_from_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
         assert!(!dst.is_fp() && src.is_fp());
-        self.e.pushq(dst);
-        self.e.mov_rm_fp(
-            fp,
-            Scale::NoScale,
-            (Reg::RSP, Reg::NoIndex, 0),
-            src,
-        );
-        self.e.popq(dst);
+        let rm = (Reg::RBP, Reg::NoIndex, self.scratch_disp(0));
+        self.e.mov_rm_fp(fp, Scale::NoScale, rm, src);
+        self.e.mov_reg_rm(S::Q, Scale::NoScale, dst, rm);
     }
 
     fn call_builtin(&mut self, func: builtins::BuiltinFunc) {

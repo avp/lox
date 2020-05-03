@@ -1,0 +1,8 @@
+// RUN: @lox @file
+
+print 1 + 1;
+// CHECK: 2
+print 1 + 1 + 1 + 1 + 1;
+// CHECK: 5
+print (2 + 3) * (2 * 3);
+// CHECK: 30
