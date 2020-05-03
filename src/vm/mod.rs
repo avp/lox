@@ -14,14 +14,12 @@ use jit::JitContext;
 /// in a shared context.
 pub struct VM {
     jit: JitContext,
-    interp: interpreter::Interpreter,
 }
 
 impl VM {
     pub fn new(dump_asm: bool) -> VM {
         VM {
             jit: JitContext::new(dump_asm),
-            interp: interpreter::Interpreter::new(),
         }
     }
 
@@ -29,7 +27,7 @@ impl VM {
         let fun_opt = self.jit.compile(&ast, sem);
         match fun_opt {
             Some(fun) => fun(),
-            _ => self.interp.run(&ast, sem),
+            _ => interpreter::Interpreter::run(&ast, sem),
         }
     }
 }

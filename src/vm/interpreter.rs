@@ -1,28 +1,36 @@
 use crate::ast;
 use crate::ast::Visitor;
+use crate::ctx::UniqueString;
 use crate::sem::SemInfo;
 use crate::vm::Value;
 
-pub struct Interpreter {}
+pub struct Interpreter<'ast> {
+    sem: &'ast SemInfo,
+    vars: Vec<Value>,
+}
 
-impl Interpreter {
-    pub fn new() -> Interpreter {
-        Interpreter {}
-    }
-
-    pub fn run(&mut self, file: &ast::File, sem: &SemInfo) -> Value {
-        match self.visit_file(file) {
+impl<'ast> Interpreter<'ast> {
+    pub fn run(file: &'ast ast::File, sem: &'ast SemInfo) -> Value {
+        let mut int = Interpreter {
+            sem,
+            vars: vec![Value::nil(); sem.vars.len()],
+        };
+        match int.visit_file(file) {
             Ok(v) => v,
             Err(v) => v,
         }
+    }
+
+    fn var_idx(&self, name: &UniqueString) -> usize {
+        self.sem.find_var(name).unwrap()
     }
 }
 
 type InterpResult = std::result::Result<Value, Value>;
 
-impl<'ast> ast::Visitor<'ast> for Interpreter {
+impl<'ast> ast::Visitor<'ast> for Interpreter<'ast> {
     type Output = InterpResult;
-    fn visit_file(&mut self, file: &ast::File) -> InterpResult {
+    fn visit_file(&mut self, file: &'ast ast::File) -> InterpResult {
         let mut result = Value::number(0f64);
         for decl in &file.decls {
             // Immediately use the return value if returning from a function,
@@ -35,14 +43,21 @@ impl<'ast> ast::Visitor<'ast> for Interpreter {
         Ok(result)
     }
 
-    fn visit_decl(&mut self, decl: &ast::Decl) -> InterpResult {
+    fn visit_decl(&mut self, decl: &'ast ast::Decl) -> InterpResult {
         match &decl.kind {
             ast::DeclKind::Stmt(s) => self.visit_stmt(&s),
-            ast::DeclKind::Var(_, _) => unimplemented!(),
+            ast::DeclKind::Var(name, expr) => {
+                let idx = self.var_idx(name);
+                if let Some(expr) = expr {
+                    let init = self.visit_expr(expr)?;
+                    self.vars[idx] = init;
+                }
+                Ok(Value::nil())
+            }
         }
     }
 
-    fn visit_stmt(&mut self, stmt: &ast::Stmt) -> InterpResult {
+    fn visit_stmt(&mut self, stmt: &'ast ast::Stmt) -> InterpResult {
         match &stmt.kind {
             ast::StmtKind::Expr(e) => self.visit_expr(&e),
             ast::StmtKind::Return(e) => Err(self.visit_expr(&e)?),
@@ -53,7 +68,7 @@ impl<'ast> ast::Visitor<'ast> for Interpreter {
         }
     }
 
-    fn visit_expr(&mut self, expr: &ast::Expr) -> InterpResult {
+    fn visit_expr(&mut self, expr: &'ast ast::Expr) -> InterpResult {
         use ast::BinOpKind;
         use ast::UnOpKind;
         use crate::vm::value::Tag;
@@ -86,6 +101,10 @@ impl<'ast> ast::Visitor<'ast> for Interpreter {
                 Ok(result)
             }
             ast::ExprKind::NumberLiteral(x) => Ok(Value::number(*x)),
+            ast::ExprKind::Ident(name) => {
+                let idx = self.var_idx(name);
+                Ok(self.vars[idx].clone())
+            }
             _ => unimplemented!(),
         }
     }

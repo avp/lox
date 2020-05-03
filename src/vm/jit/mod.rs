@@ -9,7 +9,6 @@ use super::builtins;
 use super::Value;
 use emitter::{Reg, Scale, FP, S};
 use mem::ExecHeap;
-use std::ops::{Add, BitAnd, Not, Sub};
 
 pub struct JitContext {
     heap: ExecHeap,
@@ -42,7 +41,6 @@ impl JitContext {
 /// Compiles a global function.
 /// Construct a new instance for each function you want to compile.
 struct Jit<'ctx, 'ast> {
-    ctx: &'ctx JitContext,
     e: emitter::Emitter<'ctx>,
     file: &'ast ast::File,
     sem: &'ast SemInfo,
@@ -56,7 +54,6 @@ impl<'ctx, 'ast> Jit<'_, '_> {
     ) -> Jit<'ctx, 'ast> {
         let buf: &'ctx mut [u8] = (&mut ctx.heap).alloc(4096);
         Jit {
-            ctx: &*ctx,
             e: emitter::Emitter::new(&mut *buf),
             file,
             sem,
@@ -106,7 +103,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                     _ => unimplemented!(),
                 },
                 DeclKind::Var(name, expr) => {
-                    let disp = self.local_disp(name);
+                    let disp = self.var_disp(name);
                     if let Some(e) = expr {
                         self.compile_expr(&e);
                         self.e.mov_rm_reg(
@@ -136,7 +133,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         match &expr.kind {
             Assign(left, right) => match &left.kind {
                 Ident(name) => {
-                    let disp = self.local_disp(&name);
+                    let disp = self.var_disp(&name);
                     self.compile_expr(&right);
                     self.e.mov_rm_reg(
                         S::Q,
@@ -173,7 +170,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                 self.e.popq(Reg::RBX);
             }
             Ident(name) => {
-                let disp = self.local_disp(&name);
+                let disp = self.var_disp(&name);
                 self.e.mov_reg_rm(
                     S::Q,
                     Scale::NoScale,
@@ -185,28 +182,24 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         }
     }
 
-    fn num_locals(&self) -> u32 {
+    fn num_vars(&self) -> u32 {
         self.sem.vars.len() as u32
     }
 
-    fn local_disp(&self, name: &UniqueString) -> i32 {
-        for i in 0..self.num_locals() {
-            if &self.sem.vars[i as usize] == name {
-                return (i + 1) as i32 * -8;
-            }
-        }
-        unreachable!("Invalid local");
+    fn var_disp(&self, name: &UniqueString) -> i32 {
+        let slot = self.sem.find_var(name).unwrap() as i32;
+        // Slot 0 is at [RBP-8] because the stack grows up.
+        (slot + 1) * -8
     }
 
     fn emit_prologue(&mut self) {
         self.e.pushq(Reg::RBP);
         self.e.mov_reg_reg(S::Q, Reg::RBP, Reg::RSP);
-        if self.num_locals() > 0 {
-            self.e.sub_reg_imm(
-                S::Q,
-                Reg::RSP,
-                align(self.num_locals() * 8, 16),
-            );
+
+        // Make enough space to spill every local.
+        if self.num_vars() > 0 {
+            self.e
+                .sub_reg_imm(S::Q, Reg::RSP, align(self.num_vars() * 8, 16));
         }
     }
 

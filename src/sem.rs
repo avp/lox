@@ -10,6 +10,7 @@ pub struct SemInfo {
 
 impl SemInfo {
     pub fn find_var(&self, name: &UniqueString) -> Option<usize> {
+        // TODO: Don't use linear scan for variables, that's ridiculous.
         self.vars.iter().position(|n| n == name)
     }
 }
