@@ -69,6 +69,10 @@ impl<'ctx, 'ast> Jit<'_, '_> {
             .mode(ArchMode::Mode64)
             .build()
             .unwrap();
+        // Two pass dump: first we count the number of instructions,
+        // and then actually dump that number, because the capstone API
+        // doesn't allow us to dump a certain number of bytes, only
+        // a certain number of instructions.
         let instrs = cs.disasm_all(self.e.buf, 0).unwrap();
         let (mut bytes, mut count) = (0, 0);
         for inst in instrs.iter() {
@@ -128,6 +132,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         Some(unsafe { std::mem::transmute(self.e.buf.as_ptr()) })
     }
 
+    /// Compile the expression and place the result in rax.
     fn compile_expr(&mut self, expr: &ast::Expr) {
         use ast::ExprKind::*;
         match &expr.kind {
@@ -149,12 +154,16 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                     .mov_reg_imm(Reg::RAX, Value::number(x).raw());
             }
             BinOp(op, x, y) => {
+                // Use rcx as temporary storage (consider it "caller-saved"
+                // in some sense).
+                // xmm0 <- x
+                // xmm1 <- y
+                // op xmm0, xmm1
                 use ast::BinOpKind::*;
-                self.e.pushq(Reg::RBX);
                 self.compile_expr(&x);
-                self.e.mov_reg_reg(S::Q, Reg::RBX, Reg::RAX);
+                self.e.mov_reg_reg(S::Q, Reg::RCX, Reg::RAX);
                 self.compile_expr(&y);
-                self.fp_from_reg(FP::Double, Reg::XMM0, Reg::RBX);
+                self.fp_from_reg(FP::Double, Reg::XMM0, Reg::RCX);
                 self.fp_from_reg(FP::Double, Reg::XMM1, Reg::RAX);
                 match op {
                     Add => self.e
@@ -167,7 +176,6 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                         .div_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1),
                 }
                 self.reg_from_fp(FP::Double, Reg::RAX, Reg::XMM0);
-                self.e.popq(Reg::RBX);
             }
             Ident(name) => {
                 let disp = self.var_disp(&name);
@@ -186,9 +194,11 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         self.sem.vars.len() as u32
     }
 
+    /// Return the offset from rbp at which the variable called `name`
+    /// can be found. This is a negative integer, and multiple of 8.
     fn var_disp(&self, name: &UniqueString) -> i32 {
         let slot = self.sem.find_var(name).unwrap() as i32;
-        // Slot 0 is at [RBP-8] because the stack grows up.
+        // Slot 0 is at [rbp-8] because the stack grows up.
         (slot + 1) * -8
     }
 
@@ -197,6 +207,10 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         self.e.mov_reg_reg(S::Q, Reg::RBP, Reg::RSP);
 
         // Make enough space to spill every local.
+        // Stack pointers must always be 16-byte aligned.
+        // We pushed rbp manually, and the return address was pushed
+        // as part of the call to get into this code, so we're aligned
+        // prior to subtracting for variable space.
         if self.num_vars() > 0 {
             self.e
                 .sub_reg_imm(S::Q, Reg::RSP, align(self.num_vars() * 8, 16));
@@ -233,6 +247,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
     }
 }
 
+/// Align `x` to `to`; set it to the smallest multiple of `to` that is >= `x`.
 fn align(x: u32, to: u32) -> u32 {
     (x + (to - 1)) & !(to - 1)
 }
