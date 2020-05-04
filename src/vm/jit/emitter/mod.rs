@@ -1,6 +1,8 @@
+mod cond;
 mod imm;
 mod reg;
 
+pub use cond::{CCode, OffsetType};
 pub use imm::Immediate;
 pub use reg::{AddrMode, Reg, FP, S};
 
@@ -95,7 +97,7 @@ impl<'buf> Emitter<'buf> {
                             rm,
                             reg_opcode,
                         ));
-                    } else if offset as u8 as i8 as i32 == offset {
+                    } else if is_i8(offset) {
                         self.emit(encode_mod_rm(
                             AddrMode::AtRegDisp8,
                             rm,
@@ -338,6 +340,32 @@ impl<'buf> Emitter<'buf> {
         );
     }
 
+    pub fn cjump(&mut self, cond: CCode, t: OffsetType, target: i32) {
+        // Account for the two bytes of the instruction itself.
+        let offset = target - self.index as i32 - 2;
+        match t {
+            OffsetType::Auto => self.cjump(
+                cond,
+                if is_i8(offset) {
+                    OffsetType::Int8
+                } else {
+                    OffsetType::Int32
+                },
+                offset,
+            ),
+            OffsetType::Int8 => {
+                self.emit(cond.opcode());
+                self.emit_imm::<i8>(offset as i8);
+            }
+            OffsetType::Int32 => {
+                // This one's 6 bytes long so subtract another 4.
+                self.emit(0x0f);
+                self.emit(cond.opcode() + 0x10);
+                self.emit_imm::<i32>(offset - 4);
+            }
+        }
+    }
+
     pub fn leave(&mut self) {
         self.emit(0xc9);
     }
@@ -368,6 +396,10 @@ fn log(scale: u32) -> u8 {
         8 => 0b11,
         _ => unreachable!("invalid scale"),
     }
+}
+
+fn is_i8(x: i32) -> bool {
+    x as u8 as i8 as i32 == x
 }
 
 fn encode_sib(scale: u32, (base, index, _offset): RM) -> u8 {
@@ -551,6 +583,19 @@ mod tests {
     }
 
     #[test]
+    fn cjump() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.cjump(CCode::E, OffsetType::Int8, 0x12);
+        check_str!(e, "je 0x12");
+        e.cjump(CCode::E, OffsetType::Int8, -0x12);
+        check_str!(e, "je 0xffffffffffffffee");
+        e.cjump(CCode::E, OffsetType::Int8, 0x0);
+        check_str!(e, "je 0");
+    }
+
+    #[test]
     fn fp() {
         let mut buf = [0u8; 0x100];
         let mut e = Emitter::new(&mut buf);
@@ -589,5 +634,14 @@ mod tests {
         reset!(e);
         e.call_reg(Reg::RAX);
         check!(e, [0xff, 0xd0]);
+    }
+
+    #[test]
+    fn is_i8() {
+        use super::is_i8;
+        assert!(is_i8(-120));
+        assert!(is_i8(120));
+        assert!(!is_i8(300));
+        assert!(!is_i8(-300));
     }
 }

@@ -10,6 +10,18 @@ impl Immediate for u8 {
     }
 }
 
+impl Immediate for i8 {
+    fn s() -> S {
+        S::B
+    }
+}
+
+impl Immediate for i32 {
+    fn s() -> S {
+        S::L
+    }
+}
+
 impl Immediate for u32 {
     fn s() -> S {
         S::L
