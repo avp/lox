@@ -106,8 +106,6 @@ pub enum Reg {
     NONE,
     NoIndex,
     ModSIB,
-
-    Call,
 }
 
 impl Reg {
@@ -202,8 +200,6 @@ impl Reg {
             NONE => 0,
             NoIndex => 4,
             ModSIB => 5,
-
-            Call => 2,
         }
     }
 
