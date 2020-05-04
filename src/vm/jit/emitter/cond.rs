@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum CCode {
     A,
@@ -56,6 +57,7 @@ impl CCode {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum OffsetType {
     Auto,

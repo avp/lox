@@ -1,7 +1,6 @@
 mod builtins;
 mod interpreter;
 mod jit;
-mod operations;
 mod value;
 
 pub use value::Value;

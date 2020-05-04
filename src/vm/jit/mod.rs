@@ -163,12 +163,8 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                 // op xmm0, xmm1
                 use ast::BinOpKind::*;
                 self.compile_expr(&x);
-                // self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
-                // self.call_builtin(builtins::to_number);
                 self.e.pushq(Reg::RAX);
                 self.compile_expr(&y);
-                // self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
-                // self.call_builtin(builtins::to_number);
                 self.e.popq(Reg::RBX);
                 self.fp_from_reg(FP::Double, Reg::XMM0, Reg::RBX);
                 self.fp_from_reg(FP::Double, Reg::XMM1, Reg::RAX);
