@@ -23,7 +23,7 @@ impl VM {
         }
     }
 
-    pub fn run(&mut self, ast: ast::P<ast::File>, sem: &SemInfo) -> Value {
+    pub fn run(&mut self, ast: ast::P<ast::Func>, sem: &SemInfo) -> Value {
         let fun_opt = self.jit.compile(&ast, sem);
         match fun_opt {
             Some(fun) => fun(),

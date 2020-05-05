@@ -1,20 +1,26 @@
-use codespan::{FileId, Span};
+use codespan::Span;
 use crate::ctx::UniqueString;
 
 pub type P<T> = Box<T>;
 
-pub trait ASTNode<'ast> {
+pub trait Visitable<'ast> {
     fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>);
 }
 
+pub trait ASTNode {}
+impl ASTNode for Func {}
+impl ASTNode for Decl {}
+impl ASTNode for Stmt {}
+impl ASTNode for Expr {}
+
 #[derive(Debug)]
-pub struct File {
+pub struct Func {
+    pub params: Vec<UniqueString>,
     pub decls: Vec<P<Decl>>,
-    pub id: FileId,
     pub span: Span,
 }
 
-impl<'ast> ASTNode<'ast> for File {
+impl<'ast> Visitable<'ast> for Func {
     fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>) {
         for decl in &self.decls {
             v.visit_decl(decl);
@@ -34,7 +40,7 @@ pub struct Decl {
     pub span: Span,
 }
 
-impl<'ast> ASTNode<'ast> for Decl {
+impl<'ast> Visitable<'ast> for Decl {
     fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>) {
         match &self.kind {
             DeclKind::Stmt(stmt) => {
@@ -61,7 +67,7 @@ pub struct Stmt {
     pub span: Span,
 }
 
-impl<'ast> ASTNode<'ast> for Stmt {
+impl<'ast> Visitable<'ast> for Stmt {
     fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>) {
         match &self.kind {
             StmtKind::Expr(expr) => {
@@ -108,7 +114,7 @@ pub struct Expr {
     pub span: Span,
 }
 
-impl<'ast> ASTNode<'ast> for Expr {
+impl<'ast> Visitable<'ast> for Expr {
     fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>) {
         match &self.kind {
             ExprKind::Assign(e1, e2) => {
@@ -132,7 +138,7 @@ impl<'ast> ASTNode<'ast> for Expr {
 
 pub trait Visitor<'ast> {
     type Output;
-    fn visit_file(&mut self, file: &'ast File) -> Self::Output;
+    fn visit_func(&mut self, file: &'ast Func) -> Self::Output;
     fn visit_decl(&mut self, decl: &'ast Decl) -> Self::Output;
     fn visit_stmt(&mut self, stmt: &'ast Stmt) -> Self::Output;
     fn visit_expr(&mut self, expr: &'ast Expr) -> Self::Output;

@@ -1,4 +1,3 @@
-use crate::ast::ASTNode;
 use crate::ast::*;
 use crate::ctx::UniqueString;
 
@@ -16,7 +15,8 @@ impl SemInfo {
 }
 
 pub struct SemanticValidator<'ast> {
-    file: Option<&'ast File>,
+    file: Option<&'ast Func>,
+    file_id: codespan::FileId,
     sem: SemInfo,
     errors: Vec<SemError>,
 }
@@ -40,13 +40,14 @@ impl SemError {
 }
 
 impl<'ast> SemanticValidator<'ast> {
-    pub fn run(file: &'ast File) -> Result<SemInfo> {
+    pub fn run(file: &'ast Func, file_id: codespan::FileId) -> Result<SemInfo> {
         let mut sem = SemanticValidator {
             file: None,
+            file_id,
             sem: SemInfo { vars: vec![] },
             errors: vec![],
         };
-        sem.visit_file(file);
+        sem.visit_func(file);
         if sem.errors.len() > 0 {
             return Err(sem.errors);
         }
@@ -57,7 +58,7 @@ impl<'ast> SemanticValidator<'ast> {
 impl<'ast> Visitor<'ast> for SemanticValidator<'ast> {
     type Output = ();
 
-    fn visit_file(&mut self, file: &'ast File) {
+    fn visit_func(&mut self, file: &'ast Func) {
         self.file = Some(file);
         file.visit_children(self);
     }
@@ -82,7 +83,7 @@ impl<'ast> Visitor<'ast> for SemanticValidator<'ast> {
                 if !self.sem.find_var(name).is_some() {
                     self.errors.push(SemError(Diagnostic::new_error(
                         format!("Undeclared variable '{}'", name),
-                        Label::new(self.file.unwrap().id, expr.span, ""),
+                        Label::new(self.file_id, expr.span, ""),
                     )))
                 }
             }

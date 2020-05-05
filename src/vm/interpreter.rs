@@ -10,12 +10,12 @@ pub struct Interpreter<'ast> {
 }
 
 impl<'ast> Interpreter<'ast> {
-    pub fn run(file: &'ast ast::File, sem: &'ast SemInfo) -> Value {
+    pub fn run(file: &'ast ast::Func, sem: &'ast SemInfo) -> Value {
         let mut int = Interpreter {
             sem,
             vars: vec![Value::nil(); sem.vars.len()],
         };
-        match int.visit_file(file) {
+        match int.visit_func(file) {
             Ok(v) => v,
             Err(v) => v,
         }
@@ -30,7 +30,7 @@ type InterpResult = std::result::Result<Value, Value>;
 
 impl<'ast> ast::Visitor<'ast> for Interpreter<'ast> {
     type Output = InterpResult;
-    fn visit_file(&mut self, file: &'ast ast::File) -> InterpResult {
+    fn visit_func(&mut self, file: &'ast ast::Func) -> InterpResult {
         let mut result = Value::number(0f64);
         for decl in &file.decls {
             // Immediately use the return value if returning from a function,

@@ -60,7 +60,7 @@ fn run(
             if opt.dump_ast {
                 println!("{:#?}", &ast);
             }
-            match sem::SemanticValidator::run(&ast) {
+            match sem::SemanticValidator::run(&ast, file_id) {
                 Err(err) => {
                     for e in err {
                         e.emit(&files);

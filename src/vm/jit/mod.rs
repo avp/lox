@@ -25,7 +25,7 @@ impl JitContext {
 
     pub fn compile(
         &mut self,
-        ast: &ast::File,
+        ast: &ast::Func,
         sem: &SemInfo,
     ) -> Option<fn() -> Value> {
         let dump = self.dump_asm;
@@ -42,14 +42,14 @@ impl JitContext {
 /// Construct a new instance for each function you want to compile.
 struct Jit<'ctx, 'ast> {
     e: emitter::Emitter<'ctx>,
-    file: &'ast ast::File,
+    file: &'ast ast::Func,
     sem: &'ast SemInfo,
 }
 
 impl<'ctx, 'ast> Jit<'_, '_> {
     fn new(
         ctx: &'ctx mut JitContext,
-        file: &'ast ast::File,
+        file: &'ast ast::Func,
         sem: &'ast SemInfo,
     ) -> Jit<'ctx, 'ast> {
         let buf: &'ctx mut [u8] = (&mut ctx.heap).alloc(4096);
