@@ -6,9 +6,13 @@ use crate::ctx::UniqueString;
 use crate::sem::SemInfo;
 
 use super::builtins;
+use super::value;
+use super::VMState;
 use super::Value;
 use emitter::{Reg, Scale, FP, S};
 use mem::ExecHeap;
+
+use std::collections::HashMap;
 
 pub struct JitContext {
     heap: ExecHeap,
@@ -27,7 +31,7 @@ impl JitContext {
         &mut self,
         ast: &ast::Func,
         sem: &SemInfo,
-    ) -> Option<fn() -> Value> {
+    ) -> Option<fn(*mut VMState) -> Value> {
         let dump = self.dump_asm;
         let mut jit = Jit::new(self, ast, sem);
         let result = jit.compile()?;
@@ -38,25 +42,60 @@ impl JitContext {
     }
 }
 
+type Label = u32;
+const EPILOGUE_LABEL: Label = Label::max_value();
+const ERROR_LABEL: Label = EPILOGUE_LABEL - 1;
+
+const REG_STATE: Reg = Reg::RBX;
+
+#[allow(dead_code)]
+#[derive(Debug, PartialEq, Eq)]
+enum RelocKind {
+    Int8,
+    Int32,
+}
+
+#[derive(Debug)]
+struct Reloc {
+    address: usize,
+    target: Label,
+    kind: RelocKind,
+}
+
+impl Reloc {
+    pub fn new(address: usize, target: Label, kind: RelocKind) -> Reloc {
+        Reloc {
+            address,
+            target,
+            kind,
+        }
+    }
+}
+
 /// Compiles a global function.
 /// Construct a new instance for each function you want to compile.
 struct Jit<'ctx, 'ast> {
     e: emitter::Emitter<'ctx>,
-    file: &'ast ast::Func,
+    func: &'ast ast::Func,
     sem: &'ast SemInfo,
+    /// Mapping from "label name" to address of label (as offset in emitter).
+    labels: HashMap<Label, usize>,
+    relocs: Vec<Reloc>,
 }
 
 impl<'ctx, 'ast> Jit<'_, '_> {
     fn new(
         ctx: &'ctx mut JitContext,
-        file: &'ast ast::Func,
+        func: &'ast ast::Func,
         sem: &'ast SemInfo,
     ) -> Jit<'ctx, 'ast> {
         let buf: &'ctx mut [u8] = (&mut ctx.heap).alloc(4096);
         Jit {
             e: emitter::Emitter::new(&mut *buf),
-            file,
+            func,
             sem,
+            labels: HashMap::new(),
+            relocs: vec![],
         }
     }
 
@@ -90,44 +129,49 @@ impl<'ctx, 'ast> Jit<'_, '_> {
 
     const NUM_SCRATCH_SLOTS: u32 = 1;
 
-    pub fn compile(&mut self) -> Option<fn() -> Value> {
-        use ast::*;
+    pub fn compile(&mut self) -> Option<fn(*mut VMState) -> Value> {
         self.emit_prologue();
-        for decl in &self.file.decls {
-            match &decl.kind {
-                DeclKind::Stmt(stmt) => match &stmt.kind {
-                    StmtKind::Expr(expr) => self.compile_expr(&expr),
-                    StmtKind::Print(expr) => {
-                        self.compile_expr(&expr);
-                        self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
-                        self.call_builtin(builtins::println);
-                    }
-                    _ => unimplemented!(),
-                },
-                DeclKind::Var(name, expr) => {
-                    let disp = self.var_disp(name);
-                    if let Some(e) = expr {
-                        self.compile_expr(&e);
-                        self.e.mov_rm_reg(
-                            S::Q,
-                            Scale::NoScale,
-                            (Reg::RBP, Reg::NoIndex, disp),
-                            Reg::RAX,
-                        );
-                    } else {
-                        self.e.mov_reg_imm(Reg::RAX, Value::nil().raw());
-                        self.e.mov_rm_reg(
-                            S::Q,
-                            Scale::NoScale,
-                            (Reg::RBP, Reg::NoIndex, disp),
-                            Reg::RAX,
-                        );
-                    }
-                }
-            };
+        for decl in &self.func.decls {
+            self.compile_decl(decl);
         }
         self.emit_epilogue();
+        self.resolve_relocs();
         Some(unsafe { std::mem::transmute(self.e.buf.as_ptr()) })
+    }
+
+    fn compile_decl(&mut self, decl: &ast::Decl) {
+        use ast::*;
+        match &decl.kind {
+            DeclKind::Stmt(stmt) => match &stmt.kind {
+                StmtKind::Expr(expr) => self.compile_expr(&expr),
+                StmtKind::Print(expr) => {
+                    self.compile_expr(&expr);
+                    self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
+                    self.call_builtin(builtins::println);
+                }
+                _ => unimplemented!(),
+            },
+            DeclKind::Var(name, expr) => {
+                let disp = self.var_disp(name);
+                if let Some(e) = expr {
+                    self.compile_expr(&e);
+                    self.e.mov_rm_reg(
+                        S::Q,
+                        Scale::NoScale,
+                        (Reg::RBP, Reg::NoIndex, disp),
+                        Reg::RAX,
+                    );
+                } else {
+                    self.e.mov_reg_imm(Reg::RAX, Value::nil().raw());
+                    self.e.mov_rm_reg(
+                        S::Q,
+                        Scale::NoScale,
+                        (Reg::RBP, Reg::NoIndex, disp),
+                        Reg::RAX,
+                    );
+                }
+            }
+        };
     }
 
     /// Compile the expression and place the result in rax.
@@ -163,20 +207,45 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                 // op xmm0, xmm1
                 use ast::BinOpKind::*;
                 self.compile_expr(&x);
+                self.need_number(Reg::RAX);
                 self.e.pushq(Reg::RAX);
                 self.compile_expr(&y);
-                self.e.popq(Reg::RBX);
-                self.fp_from_reg(FP::Double, Reg::XMM0, Reg::RBX);
-                self.fp_from_reg(FP::Double, Reg::XMM1, Reg::RAX);
+                self.need_number(Reg::RAX);
+                self.e.mov_fp_rm(
+                    FP::Double,
+                    Scale::NoScale,
+                    Reg::XMM0,
+                    (Reg::RSP, Reg::NoIndex, 0),
+                );
+                let y_rm = (Reg::RBP, Reg::NoIndex, self.scratch_disp(0));
+                self.e
+                    .mov_rm_reg(S::Q, Scale::NoScale, y_rm, Reg::RAX);
+                self.e.popq(Reg::RAX);
                 match op {
-                    Add => self.e
-                        .add_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1),
-                    Sub => self.e
-                        .sub_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1),
-                    Mul => self.e
-                        .mul_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1),
-                    Div => self.e
-                        .div_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1),
+                    Add => self.e.add_fp_rm(
+                        FP::Double,
+                        Scale::NoScale,
+                        Reg::XMM0,
+                        y_rm,
+                    ),
+                    Sub => self.e.sub_fp_rm(
+                        FP::Double,
+                        Scale::NoScale,
+                        Reg::XMM0,
+                        y_rm,
+                    ),
+                    Mul => self.e.mul_fp_rm(
+                        FP::Double,
+                        Scale::NoScale,
+                        Reg::XMM0,
+                        y_rm,
+                    ),
+                    Div => self.e.div_fp_rm(
+                        FP::Double,
+                        Scale::NoScale,
+                        Reg::XMM0,
+                        y_rm,
+                    ),
                 }
                 self.reg_from_fp(FP::Double, Reg::RAX, Reg::XMM0);
             }
@@ -214,11 +283,17 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         self.e.pushq(Reg::RBP);
         self.e.mov_reg_reg(S::Q, Reg::RBP, Reg::RSP);
 
+        self.e.pushq(REG_STATE);
+        self.e.pushq(Reg::RCX);
+
+        self.e.mov_reg_reg(S::Q, REG_STATE, Reg::RDI);
+
         // Make enough space to spill every local.
         // Stack pointers must always be 16-byte aligned.
-        // We pushed rbp manually, and the return address was pushed
-        // as part of the call to get into this code, so we're aligned
-        // prior to subtracting for variable space.
+        // We pushed rbp, State, and RCX manually,
+        // and the return address was pushed as part of the call to get
+        // into this code, so we're aligned prior to subtracting for
+        // variable space.
         self.e.sub_reg_imm(
             S::Q,
             Reg::RSP,
@@ -230,10 +305,60 @@ impl<'ctx, 'ast> Jit<'_, '_> {
     }
 
     fn emit_epilogue(&mut self) {
+        self.e.jmp(emitter::OffsetType::Int8, 0x00);
+        self.relocs.push(Reloc::new(
+            self.e.get_index() - 1,
+            EPILOGUE_LABEL,
+            RelocKind::Int8,
+        ));
+        self.labels
+            .insert(ERROR_LABEL, self.e.get_index());
+        self.e
+            .mov_reg_imm(Reg::RDI, Value::bool(true).raw());
+        self.e.mov_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (
+                REG_STATE,
+                Reg::NoIndex,
+                offset_of!(VMState, thrown_value) as i32,
+            ),
+            Reg::RDI,
+        );
+        self.labels
+            .insert(EPILOGUE_LABEL, self.e.get_index());
+        self.e.popq(Reg::RCX);
+        self.e.popq(REG_STATE);
         self.e.leave();
         self.e.ret();
     }
 
+    fn need_number(&mut self, src: Reg) {
+        self.e.mov_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (Reg::RBP, Reg::NoIndex, self.scratch_disp(0)),
+            src,
+        );
+        self.e.cmp_rm_imm::<u32>(
+            S::L,
+            Scale::NoScale,
+            (Reg::RBP, Reg::NoIndex, self.scratch_disp(0) + 4),
+            (value::LAST_TAG << (value::NUM_DATA_BITS - 32)) as u32,
+        );
+        self.e.cjump(
+            emitter::CCode::NB,
+            emitter::OffsetType::Int32,
+            0,
+        );
+        self.relocs.push(Reloc::new(
+            self.e.get_index() - 4,
+            ERROR_LABEL,
+            RelocKind::Int32,
+        ));
+    }
+
+    #[allow(dead_code)]
     fn fp_from_reg(&mut self, fp: FP, dst: Reg, src: Reg) {
         assert!(dst.is_fp() && !src.is_fp());
         let rm = (Reg::RBP, Reg::NoIndex, self.scratch_disp(0));
@@ -241,6 +366,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         self.e.mov_fp_rm(fp, Scale::NoScale, dst, rm);
     }
 
+    #[allow(dead_code)]
     fn reg_from_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
         assert!(!dst.is_fp() && src.is_fp());
         let rm = (Reg::RBP, Reg::NoIndex, self.scratch_disp(0));
@@ -252,6 +378,20 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         self.e
             .mov_reg_imm(Reg::RAX, builtins::addr(func));
         self.e.call_reg(Reg::RAX);
+    }
+
+    fn resolve_relocs(&mut self) {
+        let saved_index = self.e.get_index();
+        for reloc in &self.relocs {
+            self.e.seek(reloc.address);
+            let offset = self.labels[&reloc.target] - reloc.address;
+            match reloc.kind {
+                RelocKind::Int8 => self.e.emit_imm((offset - 1) as i8),
+                RelocKind::Int32 => self.e.emit_imm((offset - 4) as i32),
+            };
+        }
+        self.relocs.clear();
+        self.e.seek(saved_index);
     }
 }
 

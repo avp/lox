@@ -9,25 +9,46 @@ use crate::ast;
 use crate::sem::SemInfo;
 use jit::JitContext;
 
+#[repr(C)]
+pub struct VMState {
+    thrown_value: Value,
+}
+
 /// VM can execute a given AST.
 /// Stores various contexts and heaps in order to allocate things
 /// in a shared context.
 pub struct VM {
     jit: JitContext,
+    state: VMState,
 }
 
 impl VM {
     pub fn new(dump_asm: bool) -> VM {
         VM {
             jit: JitContext::new(dump_asm),
+            state: VMState {
+                thrown_value: Value::nil(),
+            },
         }
     }
 
-    pub fn run(&mut self, ast: ast::P<ast::Func>, sem: &SemInfo) -> Value {
+    pub fn run(
+        &mut self,
+        ast: ast::P<ast::Func>,
+        sem: &SemInfo,
+    ) -> Option<Value> {
         let fun_opt = self.jit.compile(&ast, sem);
-        match fun_opt {
-            Some(fun) => fun(),
+        let result = match fun_opt {
+            Some(fun) => fun(&mut self.state as *mut VMState),
             _ => interpreter::Interpreter::run(&ast, sem),
+        };
+
+        if self.state.thrown_value.get_tag() != value::Tag::Nil {
+            println!("{:?}", self.state.thrown_value.get_tag());
+            eprintln!("Error thrown during execution");
+            return None;
         }
+
+        Some(result)
     }
 }

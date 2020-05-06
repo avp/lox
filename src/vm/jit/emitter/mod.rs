@@ -31,6 +31,14 @@ impl<'buf> Emitter<'buf> {
         self.index += 1;
     }
 
+    pub fn get_index(&self) -> usize {
+        self.index
+    }
+
+    pub fn seek(&mut self, addr: usize) {
+        self.index = addr;
+    }
+
     pub fn emit_imm<T: Immediate>(&mut self, imm: T) {
         let size = std::mem::size_of::<T>();
         let buf: *mut u8 = self.buf[self.index..self.index + size].as_mut_ptr();
@@ -48,6 +56,7 @@ impl<'buf> Emitter<'buf> {
         self.emit(((num >> 24) & 0xff) as u8);
     }
 
+    #[allow(clippy::many_single_char_names)]
     fn emit_rex(&mut self, s: S, (base, index, _): RM, reg_opcode: u8) {
         let b: u8 = base.ord() >> 3;
         let x: u8 = index.ord() >> 3;
@@ -297,6 +306,13 @@ impl<'buf> Emitter<'buf> {
         self.emit_imm(imm);
     }
 
+    pub fn shr_reg_imm(&mut self, s: S, reg: Reg, imm: u8) {
+        self.emit_rex(s, (reg, Reg::NoIndex, 0), Reg::NONE.ord7());
+        self.emit(if s == S::B { 0xc0 } else { 0xc1 });
+        self.emit(encode_mod_rm(AddrMode::Reg, reg, 5));
+        self.emit_imm(imm);
+    }
+
     pub fn cmp_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
         self.op_reg_rm(s, scale, 0x3a, dst, src);
     }
@@ -317,17 +333,36 @@ impl<'buf> Emitter<'buf> {
         assert!(dst.is_fp() && src.is_fp());
         self.emit_fp_fp(fp, 0x58, dst, src);
     }
+    pub fn add_fp_rm(&mut self, fp: FP, scale: Scale, dst: Reg, src: RM) {
+        assert!(dst.is_fp());
+        self.emit_fp_rm(fp, scale, 0x58, dst, src);
+    }
+
     pub fn sub_fp_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
         assert!(dst.is_fp() && src.is_fp());
         self.emit_fp_fp(fp, 0x5c, dst, src);
     }
+    pub fn sub_fp_rm(&mut self, fp: FP, scale: Scale, dst: Reg, src: RM) {
+        assert!(dst.is_fp());
+        self.emit_fp_rm(fp, scale, 0x5c, dst, src);
+    }
+
     pub fn mul_fp_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
         assert!(dst.is_fp() && src.is_fp());
         self.emit_fp_fp(fp, 0x59, dst, src);
     }
+    pub fn mul_fp_rm(&mut self, fp: FP, scale: Scale, dst: Reg, src: RM) {
+        assert!(dst.is_fp());
+        self.emit_fp_rm(fp, scale, 0x59, dst, src);
+    }
+
     pub fn div_fp_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
         assert!(dst.is_fp() && src.is_fp());
         self.emit_fp_fp(fp, 0x5e, dst, src);
+    }
+    pub fn div_fp_rm(&mut self, fp: FP, scale: Scale, dst: Reg, src: RM) {
+        assert!(dst.is_fp());
+        self.emit_fp_rm(fp, scale, 0x5e, dst, src);
     }
 
     pub fn call_reg(&mut self, dst: Reg) {
@@ -338,6 +373,30 @@ impl<'buf> Emitter<'buf> {
             0x02,
             (dst, Reg::NoIndex, 2),
         );
+    }
+
+    pub fn jmp(&mut self, t: OffsetType, target: i32) {
+        // Account for the two bytes of the instruction itself.
+        let offset = target - self.index as i32 - 2;
+        match t {
+            OffsetType::Auto => self.jmp(
+                if is_i8(offset) {
+                    OffsetType::Int8
+                } else {
+                    OffsetType::Int32
+                },
+                offset,
+            ),
+            OffsetType::Int8 => {
+                self.emit(0xeb);
+                self.emit_imm::<i8>(offset as i8);
+            }
+            OffsetType::Int32 => {
+                // This one's 6 bytes long so subtract another 4.
+                self.emit(0xe9);
+                self.emit_imm::<i32>(offset - 4);
+            }
+        }
     }
 
     pub fn cjump(&mut self, cond: CCode, t: OffsetType, target: i32) {
@@ -555,6 +614,17 @@ mod tests {
     }
 
     #[test]
+    fn shr() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.shr_reg_imm(S::Q, Reg::RCX, 7);
+        check_str!(e, "shr rcx, 7");
+        e.shr_reg_imm(S::Q, Reg::RCX, 0x34);
+        check_str!(e, "shr rcx, 0x34");
+    }
+
+    #[test]
     fn cmp() {
         let mut buf = [0u8; 0x100];
         let mut e = Emitter::new(&mut buf);
@@ -580,6 +650,22 @@ mod tests {
             0xabu32,
         );
         check_str!(e, "cmp qword ptr [rbx], 0xab");
+        e.cmp_rm_imm(
+            S::L,
+            Scale::NoScale,
+            (Reg::RBX, Reg::NoIndex, 0),
+            0xabu32,
+        );
+        check_str!(e, "cmp dword ptr [rbx], 0xab");
+    }
+
+    #[test]
+    fn jmp() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.jmp(OffsetType::Int8, 0x12);
+        check_str!(e, "jmp 0x12");
     }
 
     #[test]
@@ -618,13 +704,34 @@ mod tests {
         check!(e, [0xf2, 0x0f, 0x10, 0xc1]);
         e.add_fp_fp(FP::Double, Reg::XMM0, Reg::XMM1);
         check!(e, [0xf2, 0x0f, 0x58, 0xc1]);
-        e.mov_fp_rm(
+        e.add_fp_rm(
             FP::Double,
             Scale::NoScale,
             Reg::XMM0,
             (Reg::RSP, Reg::NoIndex, 0),
         );
-        check!(e, [0xf2, 0x0f, 0x10, 0x04, 0x24]);
+        check_str!(e, "addsd xmm0, qword ptr [rsp]");
+        e.sub_fp_rm(
+            FP::Double,
+            Scale::NoScale,
+            Reg::XMM0,
+            (Reg::RSP, Reg::NoIndex, 0),
+        );
+        check_str!(e, "subsd xmm0, qword ptr [rsp]");
+        e.mul_fp_rm(
+            FP::Double,
+            Scale::NoScale,
+            Reg::XMM0,
+            (Reg::RSP, Reg::NoIndex, 0),
+        );
+        check_str!(e, "mulsd xmm0, qword ptr [rsp]");
+        e.div_fp_rm(
+            FP::Double,
+            Scale::NoScale,
+            Reg::XMM0,
+            (Reg::RSP, Reg::NoIndex, 0),
+        );
+        check_str!(e, "divsd xmm0, qword ptr [rsp]");
     }
 
     #[test]

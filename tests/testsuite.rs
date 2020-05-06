@@ -24,7 +24,7 @@ fn bin_path() -> String {
 
 #[test]
 fn run() {
-    lit::run::tests(|config| {
+    lit::run::tests(lit::event_handler::Default::new(), |config| {
         config.add_search_path("tests/lox/");
         config.add_extension("lox");
         config

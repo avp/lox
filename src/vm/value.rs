@@ -13,10 +13,12 @@ pub enum Tag {
 }
 
 const NUM_TAG_BITS: u64 = 16;
-const NUM_DATA_BITS: u64 = 64 - NUM_TAG_BITS;
+pub const NUM_DATA_BITS: u64 = 64 - NUM_TAG_BITS;
 
-const NIL_TAG: u64 = 0xfff9;
-const BOOL_TAG: u64 = 0xfff8;
+pub const NIL_TAG: u64 = 0xfff9;
+pub const BOOL_TAG: u64 = 0xfff8;
+
+pub const LAST_TAG: u64 = 0xfff8;
 
 impl Value {
     fn with_tag(val: u64, tag: u64) -> Value {

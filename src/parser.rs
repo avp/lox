@@ -40,7 +40,7 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
             file_id,
         };
         parser.lexer.advance();
-        parser.parse_file()
+        parser.parse_func()
     }
 
     fn unexpected(&self) -> ParseError {
@@ -90,7 +90,7 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
         }
     }
 
-    fn parse_file(&mut self) -> Result<P<Func>> {
+    fn parse_func(&mut self) -> Result<P<Func>> {
         let mut decls = vec![];
         while !self.check(TokenKind::Eof) {
             decls.push(self.parse_decl()?);

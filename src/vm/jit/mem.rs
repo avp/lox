@@ -46,7 +46,7 @@ impl Pool {
                 size,
                 libc::PROT_EXEC | libc::PROT_READ | libc::PROT_WRITE,
             );
-            buf = mem::transmute(page);
+            buf = page as *mut u8;
         }
         Pool {
             buf,

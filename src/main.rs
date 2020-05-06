@@ -1,7 +1,8 @@
-#![feature(or_insert_with_key)]
-
 #[macro_use]
 extern crate failure;
+
+#[macro_use]
+extern crate memoffset;
 
 mod lexer;
 mod token;
@@ -54,7 +55,7 @@ fn run(
     match ast_res {
         Err(err) => {
             err.emit(&files);
-            return Err(format_err!("Parsing failed"));
+            Err(format_err!("Parsing failed"))
         }
         Ok(ast) => {
             if opt.dump_ast {
@@ -65,17 +66,18 @@ fn run(
                     for e in err {
                         e.emit(&files);
                     }
-                    return Err(format_err!("Validation failed"));
+                    Err(format_err!("Validation failed"))
                 }
                 Ok(sem) => {
                     let mut vm = vm::VM::new(opt.dump_asm);
-                    vm.run(ast, &sem);
+                    match vm.run(ast, &sem) {
+                        None => Err(failure::err_msg("")),
+                        _ => Ok(()),
+                    }
                 }
             }
         }
-    };
-
-    Ok(())
+    }
 }
 
 fn main() -> Result<(), failure::Error> {

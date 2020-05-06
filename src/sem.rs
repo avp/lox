@@ -48,7 +48,7 @@ impl<'ast> SemanticValidator<'ast> {
             errors: vec![],
         };
         sem.visit_func(file);
-        if sem.errors.len() > 0 {
+        if !sem.errors.is_empty() {
             return Err(sem.errors);
         }
         Ok(sem.sem)
@@ -64,12 +64,9 @@ impl<'ast> Visitor<'ast> for SemanticValidator<'ast> {
     }
 
     fn visit_decl(&mut self, decl: &'ast Decl) {
-        match &decl.kind {
-            DeclKind::Var(name, _) => {
-                self.sem.vars.push(name.clone());
-            }
-            _ => {}
-        };
+        if let DeclKind::Var(name, _) = &decl.kind {
+            self.sem.vars.push(name.clone());
+        }
         decl.visit_children(self);
     }
 
@@ -78,16 +75,13 @@ impl<'ast> Visitor<'ast> for SemanticValidator<'ast> {
     }
 
     fn visit_expr(&mut self, expr: &'ast Expr) {
-        match &expr.kind {
-            ExprKind::Ident(name) => {
-                if !self.sem.find_var(name).is_some() {
-                    self.errors.push(SemError(Diagnostic::new_error(
-                        format!("Undeclared variable '{}'", name),
-                        Label::new(self.file_id, expr.span, ""),
-                    )))
-                }
+        if let ExprKind::Ident(name) = &expr.kind {
+            if self.sem.find_var(name).is_none() {
+                self.errors.push(SemError(Diagnostic::new_error(
+                    format!("Undeclared variable '{}'", name),
+                    Label::new(self.file_id, expr.span, ""),
+                )))
             }
-            _ => {}
         }
         expr.visit_children(self);
     }
