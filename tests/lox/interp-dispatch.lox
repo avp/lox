@@ -1,0 +1,18 @@
+// RUN: @lox @file
+
+var lc = 40000;
+var fc = 100;
+var n = 0;
+var fact = 0;
+var res = 0;
+while (lc) {
+  n = fc;
+  fact = n;
+  while (n) {
+    fact = fact * n;
+    n = n - 1;
+  }
+  res = res + fact;
+  lc = lc - 1;
+}
+print res;

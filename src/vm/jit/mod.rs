@@ -434,7 +434,6 @@ impl<'ctx, 'ast> Jit<'_, '_> {
 
     fn resolve_relocs(&mut self) {
         let saved_index = self.e.get_index();
-        dbg!(&self.relocs, &self.labels);
         for reloc in &self.relocs {
             self.e.seek(reloc.address);
             let offset: i32 =
