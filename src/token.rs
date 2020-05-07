@@ -92,6 +92,9 @@ pub enum ResWord {
     Return,
     Print,
     Var,
+    For,
+    While,
+    If,
 }
 
 impl Token {
@@ -139,6 +142,9 @@ impl Token {
                 "return" => TokenKind::ResWord(ResWord::Return),
                 "print" => TokenKind::ResWord(ResWord::Print),
                 "var" => TokenKind::ResWord(ResWord::Var),
+                "for" => TokenKind::ResWord(ResWord::For),
+                "while" => TokenKind::ResWord(ResWord::While),
+                "if" => TokenKind::ResWord(ResWord::If),
                 _ => return None,
             },
             span,

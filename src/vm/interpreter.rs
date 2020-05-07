@@ -30,15 +30,19 @@ type InterpResult = std::result::Result<Value, Value>;
 
 impl<'ast> ast::Visitor<'ast> for Interpreter<'ast> {
     type Output = InterpResult;
-    fn visit_func(&mut self, file: &'ast ast::Func) -> InterpResult {
-        let mut result = Value::number(0f64);
-        for decl in &file.decls {
+    fn visit_func(&mut self, func: &'ast ast::Func) -> InterpResult {
+        self.visit_block(&func.body)
+    }
+
+    fn visit_block(&mut self, block: &'ast ast::Block) -> InterpResult {
+        let mut result = Value::nil();
+        for decl in &block.decls {
             // Immediately use the return value if returning from a function,
             // but make sure to never return Err.
             result = match self.visit_decl(&decl) {
                 Ok(v) => v,
                 Err(v) => return Ok(v),
-            }
+            };
         }
         Ok(result)
     }
@@ -60,6 +64,7 @@ impl<'ast> ast::Visitor<'ast> for Interpreter<'ast> {
     fn visit_stmt(&mut self, stmt: &'ast ast::Stmt) -> InterpResult {
         match &stmt.kind {
             ast::StmtKind::Expr(e) => self.visit_expr(&e),
+            ast::StmtKind::While(_, _) => unimplemented!(),
             ast::StmtKind::Return(e) => Err(self.visit_expr(&e)?),
             ast::StmtKind::Print(e) => {
                 println!("{}", self.visit_expr(e)?);

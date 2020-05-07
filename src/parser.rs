@@ -101,9 +101,22 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
         };
         Ok(P::new(Func {
             params: vec![],
-            decls,
+            body: P::new(Block { decls, span }),
             span,
         }))
+    }
+
+    fn parse_block(&mut self) -> Result<P<Block>> {
+        assert!(self.check(TokenKind::LBrace));
+        let start = self.lexer.token.span;
+        self.eat(TokenKind::LBrace)?;
+        let mut decls = vec![];
+        while !self.check(TokenKind::RBrace) {
+            decls.push(self.parse_decl()?);
+        }
+        let span = start.merge(self.lexer.token.span);
+        self.eat(TokenKind::RBrace)?;
+        Ok(P::new(Block { decls, span }))
     }
 
     fn parse_decl(&mut self) -> Result<P<Decl>> {
@@ -143,6 +156,17 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
             self.eat(TokenKind::Semi)?;
             Ok(P::new(Stmt {
                 kind: StmtKind::Print(expr),
+                span,
+            }))
+        } else if self.check_eat(TokenKind::ResWord(ResWord::While)) {
+            self.eat(TokenKind::LParen)?;
+            let expr = self.parse_expr()?;
+            self.eat(TokenKind::RParen)?;
+            self.need(TokenKind::LBrace)?;
+            let body = self.parse_block()?;
+            let span = start.merge(body.span);
+            Ok(P::new(Stmt {
+                kind: StmtKind::While(expr, body),
                 span,
             }))
         } else if self.check_eat(TokenKind::ResWord(ResWord::Return)) {

@@ -131,26 +131,22 @@ impl<'ctx, 'ast> Jit<'_, '_> {
 
     pub fn compile(&mut self) -> Option<fn(*mut VMState) -> Value> {
         self.emit_prologue();
-        for decl in &self.func.decls {
-            self.compile_decl(decl);
-        }
+        self.compile_block(&self.func.body);
         self.emit_epilogue();
         self.resolve_relocs();
         Some(unsafe { std::mem::transmute(self.e.buf.as_ptr()) })
     }
 
+    fn compile_block(&mut self, block: &ast::Block) {
+        for decl in &block.decls {
+            self.compile_decl(decl);
+        }
+    }
+
     fn compile_decl(&mut self, decl: &ast::Decl) {
         use ast::*;
         match &decl.kind {
-            DeclKind::Stmt(stmt) => match &stmt.kind {
-                StmtKind::Expr(expr) => self.compile_expr(&expr),
-                StmtKind::Print(expr) => {
-                    self.compile_expr(&expr);
-                    self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
-                    self.call_builtin(builtins::println);
-                }
-                _ => unimplemented!(),
-            },
+            DeclKind::Stmt(stmt) => self.compile_stmt(&stmt),
             DeclKind::Var(name, expr) => {
                 let disp = self.var_disp(name);
                 if let Some(e) = expr {
@@ -171,6 +167,56 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                     );
                 }
             }
+        };
+    }
+
+    fn compile_stmt(&mut self, stmt: &ast::Stmt) {
+        use ast::*;
+        match &stmt.kind {
+            StmtKind::Expr(expr) => self.compile_expr(&expr),
+            StmtKind::Print(expr) => {
+                self.compile_expr(&expr);
+                self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
+                self.call_builtin(builtins::println);
+            }
+            StmtKind::While(cond, body) => {
+                let top_label = self.new_label();
+
+                // rax <- to_bool(cond)
+                self.compile_expr(&cond);
+                self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
+                self.call_builtin(builtins::to_bool);
+
+                // Check bottom bits of rax to see if the bool is true or false.
+                self.e.test_reg_reg(S::B, Reg::AL, Reg::AL);
+                self.e.cjump(
+                    emitter::CCode::E,
+                    emitter::OffsetType::Int32,
+                    0.into(),
+                );
+                let branch_addr = self.e.get_index();
+
+                self.compile_block(&body);
+
+                // Bottom of the loop, jump back up to the top to check
+                // the condition again.
+                self.e.jmp(emitter::OffsetType::Int32, 0.into());
+                self.relocs.push(Reloc::new(
+                    self.e.get_index() - 4,
+                    top_label,
+                    RelocKind::Int32,
+                ));
+
+                // Done with the loop if we jumped here, now we can emplace
+                // the reloc for the top of the loop.
+                let done_label = self.new_label();
+                self.relocs.push(Reloc::new(
+                    branch_addr - 4,
+                    done_label,
+                    RelocKind::Int32,
+                ));
+            }
+            _ => unimplemented!(),
         };
     }
 
@@ -380,11 +426,19 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         self.e.call_reg(Reg::RAX);
     }
 
+    fn new_label(&mut self) -> Label {
+        let label: Label = self.labels.len() as Label;
+        self.labels.insert(label, self.e.get_index());
+        label
+    }
+
     fn resolve_relocs(&mut self) {
         let saved_index = self.e.get_index();
+        dbg!(&self.relocs, &self.labels);
         for reloc in &self.relocs {
             self.e.seek(reloc.address);
-            let offset = self.labels[&reloc.target] - reloc.address;
+            let offset: i32 =
+                self.labels[&reloc.target] as i32 - reloc.address as i32;
             match reloc.kind {
                 RelocKind::Int8 => self.e.emit_imm((offset - 1) as i8),
                 RelocKind::Int32 => self.e.emit_imm((offset - 4) as i32),

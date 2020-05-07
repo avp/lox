@@ -329,6 +329,13 @@ impl<'buf> Emitter<'buf> {
         self.op_rm_imm(s, scale, 0x80, 7, dst, src);
     }
 
+    pub fn test_rm_reg(&mut self, s: S, scale: Scale, dst: RM, src: Reg) {
+        self.op_reg_rm(s, scale, 0x84, src, dst);
+    }
+    pub fn test_reg_reg(&mut self, s: S, dst: Reg, src: Reg) {
+        self.test_rm_reg(s, Scale::RegScale, (dst, Reg::NoIndex, 0), src);
+    }
+
     pub fn add_fp_fp(&mut self, fp: FP, dst: Reg, src: Reg) {
         assert!(dst.is_fp() && src.is_fp());
         self.emit_fp_fp(fp, 0x58, dst, src);
@@ -657,6 +664,22 @@ mod tests {
             0xabu32,
         );
         check_str!(e, "cmp dword ptr [rbx], 0xab");
+    }
+
+    #[test]
+    fn test() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.test_rm_reg(
+            S::B,
+            Scale::RegScale,
+            (Reg::AL, Reg::NoIndex, 0),
+            Reg::AL,
+        );
+        check_str!(e, "test al, al");
+        e.test_reg_reg(S::B, Reg::AL, Reg::AL);
+        check_str!(e, "test al, al");
     }
 
     #[test]

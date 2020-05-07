@@ -9,6 +9,7 @@ pub trait Visitable<'ast> {
 
 pub trait ASTNode {}
 impl ASTNode for Func {}
+impl ASTNode for Block {}
 impl ASTNode for Decl {}
 impl ASTNode for Stmt {}
 impl ASTNode for Expr {}
@@ -16,11 +17,23 @@ impl ASTNode for Expr {}
 #[derive(Debug)]
 pub struct Func {
     pub params: Vec<UniqueString>,
-    pub decls: Vec<P<Decl>>,
+    pub body: P<Block>,
     pub span: Span,
 }
 
 impl<'ast> Visitable<'ast> for Func {
+    fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>) {
+        v.visit_block(&self.body);
+    }
+}
+
+#[derive(Debug)]
+pub struct Block {
+    pub decls: Vec<P<Decl>>,
+    pub span: Span,
+}
+
+impl<'ast> Visitable<'ast> for Block {
     fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>) {
         for decl in &self.decls {
             v.visit_decl(decl);
@@ -57,6 +70,7 @@ impl<'ast> Visitable<'ast> for Decl {
 #[derive(Debug)]
 pub enum StmtKind {
     Expr(P<Expr>),
+    While(P<Expr>, P<Block>),
     Return(P<Expr>),
     Print(P<Expr>),
 }
@@ -72,6 +86,10 @@ impl<'ast> Visitable<'ast> for Stmt {
         match &self.kind {
             StmtKind::Expr(expr) => {
                 v.visit_expr(expr);
+            }
+            StmtKind::While(expr, body) => {
+                v.visit_expr(expr);
+                v.visit_block(body);
             }
             StmtKind::Return(expr) => {
                 v.visit_expr(expr);
@@ -139,6 +157,7 @@ impl<'ast> Visitable<'ast> for Expr {
 pub trait Visitor<'ast> {
     type Output;
     fn visit_func(&mut self, file: &'ast Func) -> Self::Output;
+    fn visit_block(&mut self, block: &'ast Block) -> Self::Output;
     fn visit_decl(&mut self, decl: &'ast Decl) -> Self::Output;
     fn visit_stmt(&mut self, stmt: &'ast Stmt) -> Self::Output;
     fn visit_expr(&mut self, expr: &'ast Expr) -> Self::Output;

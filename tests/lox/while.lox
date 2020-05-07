@@ -1,0 +1,13 @@
+// RUN: @lox @file
+
+var x = 5;
+while (x) {
+  print x;
+  x = x - 1;
+}
+
+// CHECK: 5
+// CHECK: 4
+// CHECK: 3
+// CHECK: 2
+// CHECK: 1

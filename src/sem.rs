@@ -63,6 +63,10 @@ impl<'ast> Visitor<'ast> for SemanticValidator<'ast> {
         file.visit_children(self);
     }
 
+    fn visit_block(&mut self, block: &'ast Block) {
+        block.visit_children(self);
+    }
+
     fn visit_decl(&mut self, decl: &'ast Decl) {
         if let DeclKind::Var(name, _) = &decl.kind {
             self.sem.vars.push(name.clone());
