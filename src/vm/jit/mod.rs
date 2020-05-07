@@ -121,10 +121,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                 break;
             }
         }
-        println!(
-            "{}",
-            cs.disasm_count(self.e.buf, 0, count).unwrap()
-        );
+        println!("{}", cs.disasm_count(self.e.buf, 0, count).unwrap());
     }
 
     const NUM_SCRATCH_SLOTS: u32 = 1;
@@ -238,12 +235,10 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                 _ => unreachable!("invalid ast"),
             },
             &BoolLiteral(b) => {
-                self.e
-                    .mov_reg_imm(Reg::RAX, Value::bool(b).raw());
+                self.e.mov_reg_imm(Reg::RAX, Value::bool(b).raw());
             }
             &NumberLiteral(x) => {
-                self.e
-                    .mov_reg_imm(Reg::RAX, Value::number(x).raw());
+                self.e.mov_reg_imm(Reg::RAX, Value::number(x).raw());
             }
             BinOp(op, x, y) => {
                 // Use rbx as temporary storage (consider it "callee-saved"
@@ -264,8 +259,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                     (Reg::RSP, Reg::NoIndex, 0),
                 );
                 let y_rm = (Reg::RBP, Reg::NoIndex, self.scratch_disp(0));
-                self.e
-                    .mov_rm_reg(S::Q, Scale::NoScale, y_rm, Reg::RAX);
+                self.e.mov_rm_reg(S::Q, Scale::NoScale, y_rm, Reg::RAX);
                 self.e.popq(Reg::RAX);
                 match op {
                     Add => self.e.add_fp_rm(
@@ -343,10 +337,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         self.e.sub_reg_imm(
             S::Q,
             Reg::RSP,
-            align(
-                (Self::NUM_SCRATCH_SLOTS + self.num_vars()) * 8,
-                16,
-            ),
+            align((Self::NUM_SCRATCH_SLOTS + self.num_vars()) * 8, 16),
         );
     }
 
@@ -357,10 +348,8 @@ impl<'ctx, 'ast> Jit<'_, '_> {
             EPILOGUE_LABEL,
             RelocKind::Int8,
         ));
-        self.labels
-            .insert(ERROR_LABEL, self.e.get_index());
-        self.e
-            .mov_reg_imm(Reg::RDI, Value::bool(true).raw());
+        self.labels.insert(ERROR_LABEL, self.e.get_index());
+        self.e.mov_reg_imm(Reg::RDI, Value::bool(true).raw());
         self.e.mov_rm_reg(
             S::Q,
             Scale::NoScale,
@@ -371,8 +360,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
             ),
             Reg::RDI,
         );
-        self.labels
-            .insert(EPILOGUE_LABEL, self.e.get_index());
+        self.labels.insert(EPILOGUE_LABEL, self.e.get_index());
         self.e.popq(Reg::RCX);
         self.e.popq(REG_STATE);
         self.e.leave();
@@ -392,11 +380,8 @@ impl<'ctx, 'ast> Jit<'_, '_> {
             (Reg::RBP, Reg::NoIndex, self.scratch_disp(0) + 4),
             (value::LAST_TAG << (value::NUM_DATA_BITS - 32)) as u32,
         );
-        self.e.cjump(
-            emitter::CCode::NB,
-            emitter::OffsetType::Int32,
-            0,
-        );
+        self.e
+            .cjump(emitter::CCode::NB, emitter::OffsetType::Int32, 0);
         self.relocs.push(Reloc::new(
             self.e.get_index() - 4,
             ERROR_LABEL,
@@ -421,8 +406,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
     }
 
     fn call_builtin(&mut self, func: builtins::BuiltinFunc) {
-        self.e
-            .mov_reg_imm(Reg::RAX, builtins::addr(func));
+        self.e.mov_reg_imm(Reg::RAX, builtins::addr(func));
         self.e.call_reg(Reg::RAX);
     }
 

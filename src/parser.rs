@@ -316,9 +316,6 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
             _ => return Err(self.unexpected()),
         };
         self.lexer.advance();
-        Ok(P::new(Expr {
-            kind,
-            span: start,
-        }))
+        Ok(P::new(Expr { kind, span: start }))
     }
 }

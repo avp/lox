@@ -74,15 +74,13 @@ impl<'ast> ast::Visitor<'ast> for Interpreter<'ast> {
     }
 
     fn visit_expr(&mut self, expr: &'ast ast::Expr) -> InterpResult {
+        use crate::vm::value::Tag;
         use ast::BinOpKind;
         use ast::UnOpKind;
-        use crate::vm::value::Tag;
         match &expr.kind {
             ast::ExprKind::BinOp(op, left, right) => {
-                let (l, r) = (
-                    self.visit_expr(&left)?,
-                    self.visit_expr(&right)?,
-                );
+                let (l, r) =
+                    (self.visit_expr(&left)?, self.visit_expr(&right)?);
                 let result = match (l.get_tag(), r.get_tag()) {
                     (Tag::Number, Tag::Number) => Value::number(match op {
                         BinOpKind::Add => l.get_number() + r.get_number(),

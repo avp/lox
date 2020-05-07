@@ -27,8 +27,7 @@ fn run() {
     lit::run::tests(lit::event_handler::Default::new(), |config| {
         config.add_search_path("tests/lox/");
         config.add_extension("lox");
-        config
-            .constants
-            .insert("lox".to_owned(), bin_path());
-    }).expect("LIT tests failed");
+        config.constants.insert("lox".to_owned(), bin_path());
+    })
+    .expect("LIT tests failed");
 }

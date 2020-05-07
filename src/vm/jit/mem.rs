@@ -48,11 +48,7 @@ impl Pool {
             );
             buf = page as *mut u8;
         }
-        Pool {
-            buf,
-            size,
-            cur: 0,
-        }
+        Pool { buf, size, cur: 0 }
     }
 
     pub fn alloc(&mut self, size: usize) -> Option<*mut u8> {

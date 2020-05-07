@@ -1,5 +1,5 @@
-use codespan::Span;
 use crate::ctx::UniqueString;
+use codespan::Span;
 
 pub type P<T> = Box<T>;
 

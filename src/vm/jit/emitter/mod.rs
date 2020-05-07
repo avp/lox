@@ -218,11 +218,7 @@ impl<'buf> Emitter<'buf> {
         self.emit_mod_rm_full(
             s,
             scale,
-            if s == S::B {
-                opcode
-            } else {
-                opcode + 1
-            },
+            if s == S::B { opcode } else { opcode + 1 },
             dst.ord7(),
             src,
         );
@@ -239,11 +235,7 @@ impl<'buf> Emitter<'buf> {
         self.emit_mod_rm_full(
             s,
             scale,
-            if s == S::B {
-                opcode
-            } else {
-                opcode + 1
-            },
+            if s == S::B { opcode } else { opcode + 1 },
             opcode_extra,
             dst,
         );
@@ -511,10 +503,7 @@ mod tests {
                 .build()
                 .unwrap();
             let asm = format!("{}", cs.disasm_count($emit.buf, 0, 1).unwrap());
-            assert!(
-                asm.trim().ends_with($str),
-                format!("Found: {}", asm)
-            );
+            assert!(asm.trim().ends_with($str), format!("Found: {}", asm));
             reset!($emit);
         }};
     }
@@ -546,12 +535,7 @@ mod tests {
         let mut buf = [0u8; 0x100];
         let mut e = Emitter::new(&mut buf);
         reset!(e);
-        e.mov_reg_rm(
-            S::Q,
-            Scale::Scale(1),
-            Reg::RCX,
-            (Reg::RDX, Reg::RBX, 9),
-        );
+        e.mov_reg_rm(S::Q, Scale::Scale(1), Reg::RCX, (Reg::RDX, Reg::RBX, 9));
         check!(e, [0x48, 0x8b, 0x4c, 0x1a, 0x09]);
         e.mov_reg_rm(
             S::Q,
@@ -560,12 +544,7 @@ mod tests {
             (Reg::RDX, Reg::NoIndex, 0),
         );
         check!(e, [0x48, 0x8b, 0x0a]);
-        e.mov_reg_rm(
-            S::Q,
-            Scale::Scale(1),
-            Reg::RCX,
-            (Reg::RDX, Reg::RBX, 0),
-        );
+        e.mov_reg_rm(S::Q, Scale::Scale(1), Reg::RCX, (Reg::RDX, Reg::RBX, 0));
         check!(e, [0x48, 0x8b, 0x0c, 0x1a]);
         e.mov_rm_reg(
             S::Q,

@@ -35,9 +35,6 @@ impl StringTable {
             return res.clone();
         }
         let atom = DefaultAtom::from(s);
-        self.table
-            .entry(s.to_owned())
-            .or_insert(atom)
-            .clone()
+        self.table.entry(s.to_owned()).or_insert(atom).clone()
     }
 }

@@ -36,9 +36,7 @@ impl Value {
     }
 
     pub fn number(num: f64) -> Value {
-        Value {
-            raw: num.to_bits(),
-        }
+        Value { raw: num.to_bits() }
     }
 
     pub fn get_tag(&self) -> Tag {
