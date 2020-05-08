@@ -241,12 +241,35 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                 self.e.mov_reg_imm(Reg::RAX, Value::number(x).raw());
             }
             BinOp(op, x, y) => {
+                self.compile_binop(*op, x, y);
+            }
+            Ident(name) => {
+                let disp = self.var_disp(&name);
+                self.e.mov_reg_rm(
+                    S::Q,
+                    Scale::NoScale,
+                    Reg::RAX,
+                    (Reg::RBP, Reg::NoIndex, disp),
+                );
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn compile_binop(
+        &mut self,
+        op: ast::BinOpKind,
+        x: &'ast ast::Expr,
+        y: &'ast ast::Expr,
+    ) {
+        use ast::BinOpKind::*;
+        match op {
+            Add | Sub | Mul | Div => {
                 // Use rbx as temporary storage (consider it "callee-saved"
                 // in some sense).
                 // xmm0 <- to_number(x)
                 // xmm1 <- to_number(y)
                 // op xmm0, xmm1
-                use ast::BinOpKind::*;
                 self.compile_expr(&x);
                 self.need_number(Reg::RAX);
                 self.e.pushq(Reg::RAX);
@@ -286,19 +309,43 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                         Reg::XMM0,
                         y_rm,
                     ),
+                    _ => unreachable!(),
                 }
                 self.reg_from_fp(FP::Double, Reg::RAX, Reg::XMM0);
             }
-            Ident(name) => {
-                let disp = self.var_disp(&name);
-                self.e.mov_reg_rm(
-                    S::Q,
-                    Scale::NoScale,
-                    Reg::RAX,
-                    (Reg::RBP, Reg::NoIndex, disp),
+            Equal | NotEqual => {
+                // rbx <- x
+                // rcx <- y
+                self.compile_expr(&x);
+                self.e.pushq(Reg::RAX);
+                self.compile_expr(&y);
+                self.e.mov_reg_reg(S::Q, Reg::RCX, Reg::RAX);
+                self.e.popq(Reg::RBX);
+                // clear rax and store the result
+                self.e.xor_reg_reg(S::Q, Reg::RAX, Reg::RAX);
+                // Store the tag in the top 32 bits.
+                println!(
+                    "{:x}",
+                    (value::LAST_TAG << value::NUM_DATA_BITS) as u64
                 );
+                self.e.mov_reg_imm::<u32>(
+                    Reg::EAX,
+                    (value::LAST_TAG << (value::NUM_DATA_BITS - 32)) as u32,
+                );
+                self.e.shl_reg_imm(S::Q, Reg::RAX, 32);
+                self.e.cmp_rm_reg(
+                    S::Q,
+                    Scale::RegScale,
+                    (Reg::RBX, Reg::NoIndex, 0),
+                    Reg::RCX,
+                );
+                let ccode = match op {
+                    Equal => emitter::CCode::E,
+                    NotEqual => emitter::CCode::NE,
+                    _ => unreachable!(),
+                };
+                self.e.cset(ccode, Reg::AL);
             }
-            _ => unimplemented!(),
         }
     }
 

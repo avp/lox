@@ -107,6 +107,9 @@ pub enum BinOpKind {
     Sub,
     Mul,
     Div,
+
+    Equal,
+    NotEqual,
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]

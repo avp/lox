@@ -82,12 +82,26 @@ impl<'ast> ast::Visitor<'ast> for Interpreter<'ast> {
                 let (l, r) =
                     (self.visit_expr(&left)?, self.visit_expr(&right)?);
                 let result = match (l.get_tag(), r.get_tag()) {
-                    (Tag::Number, Tag::Number) => Value::number(match op {
-                        BinOpKind::Add => l.get_number() + r.get_number(),
-                        BinOpKind::Sub => l.get_number() - r.get_number(),
-                        BinOpKind::Mul => l.get_number() * r.get_number(),
-                        BinOpKind::Div => l.get_number() / r.get_number(),
-                    }),
+                    (Tag::Number, Tag::Number) => match op {
+                        BinOpKind::Add => {
+                            Value::number(l.get_number() + r.get_number())
+                        }
+                        BinOpKind::Sub => {
+                            Value::number(l.get_number() - r.get_number())
+                        }
+                        BinOpKind::Mul => {
+                            Value::number(l.get_number() * r.get_number())
+                        }
+                        BinOpKind::Div => {
+                            Value::number(l.get_number() / r.get_number())
+                        }
+                        BinOpKind::Equal => {
+                            Value::bool(l.get_number() == r.get_number())
+                        }
+                        BinOpKind::NotEqual => {
+                            Value::bool(l.get_number() != r.get_number())
+                        }
+                    },
                     _ => Value::nil(),
                 };
                 Ok(result)

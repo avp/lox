@@ -232,6 +232,7 @@ impl<'buf> Emitter<'buf> {
         dst: RM,
         src: T,
     ) {
+        assert!(T::s() != S::Q);
         self.emit_mod_rm_full(
             s,
             scale,
@@ -298,11 +299,66 @@ impl<'buf> Emitter<'buf> {
         self.emit_imm(imm);
     }
 
+    pub fn or_reg_reg(&mut self, s: S, dst: Reg, src: Reg) {
+        self.or_rm_reg(s, Scale::RegScale, (dst, Reg::NoIndex, 0), src);
+    }
+    pub fn or_rm_reg(&mut self, s: S, scale: Scale, dst: RM, src: Reg) {
+        self.op_reg_rm(s, scale, 0x08, src, dst);
+    }
+    pub fn or_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
+        self.op_reg_rm(s, scale, 0x0a, dst, src);
+    }
+    pub fn or_reg_imm<T: Immediate>(&mut self, s: S, reg: Reg, imm: T) {
+        self.op_rm_imm(
+            s,
+            Scale::RegScale,
+            0x80,
+            1,
+            (reg, Reg::NoIndex, 0),
+            imm,
+        );
+    }
+
+    pub fn xor_reg_reg(&mut self, s: S, dst: Reg, src: Reg) {
+        self.xor_rm_reg(s, Scale::RegScale, (dst, Reg::NoIndex, 0), src);
+    }
+    pub fn xor_rm_reg(&mut self, s: S, scale: Scale, dst: RM, src: Reg) {
+        self.op_reg_rm(s, scale, 0x30, src, dst);
+    }
+    pub fn xor_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
+        self.op_reg_rm(s, scale, 0x32, dst, src);
+    }
+    pub fn xor_reg_imm<T: Immediate>(&mut self, s: S, reg: Reg, imm: T) {
+        self.op_rm_imm(
+            s,
+            Scale::RegScale,
+            0x80,
+            6,
+            (reg, Reg::NoIndex, 0),
+            imm,
+        );
+    }
+
+    pub fn shl_reg_imm(&mut self, s: S, reg: Reg, imm: u8) {
+        self.op_rm_imm(
+            s,
+            Scale::RegScale,
+            0xc0,
+            4,
+            (reg, Reg::NoIndex, 0),
+            imm,
+        );
+    }
+
     pub fn shr_reg_imm(&mut self, s: S, reg: Reg, imm: u8) {
-        self.emit_rex(s, (reg, Reg::NoIndex, 0), Reg::NONE.ord7());
-        self.emit(if s == S::B { 0xc0 } else { 0xc1 });
-        self.emit(encode_mod_rm(AddrMode::Reg, reg, 5));
-        self.emit_imm(imm);
+        self.op_rm_imm(
+            s,
+            Scale::RegScale,
+            0xc0,
+            5,
+            (reg, Reg::NoIndex, 0),
+            imm,
+        );
     }
 
     pub fn cmp_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
@@ -422,6 +478,14 @@ impl<'buf> Emitter<'buf> {
                 self.emit_imm::<i32>(offset - 4);
             }
         }
+    }
+
+    pub fn cset(&mut self, cond: CCode, dst: Reg) {
+        // This one's 6 bytes long so subtract another 4.
+        self.emit_rex(S::B, (dst, Reg::NoIndex, 0), 0);
+        self.emit(0x0f);
+        self.emit(cond.opcode() + 0x20);
+        self.emit_mod_rm(S::B, Scale::RegScale, 0, (dst, Reg::NoIndex, 0));
     }
 
     pub fn leave(&mut self) {
@@ -600,6 +664,57 @@ mod tests {
     }
 
     #[test]
+    fn or() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.or_reg_reg(S::Q, Reg::RAX, Reg::RAX);
+        check_str!(e, "or rax, rax");
+        e.or_reg_reg(S::Q, Reg::RCX, Reg::RDX);
+        check_str!(e, "or rcx, rdx");
+        e.or_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (Reg::RCX, Reg::NoIndex, 0),
+            Reg::RDX,
+        );
+        check_str!(e, "or qword ptr [rcx], rdx");
+        e.or_reg_imm(S::Q, Reg::RAX, 3u32);
+        check_str!(e, "or rax, 3");
+    }
+
+    #[test]
+    fn xor() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.xor_reg_reg(S::Q, Reg::RAX, Reg::RAX);
+        check_str!(e, "xor rax, rax");
+        e.xor_reg_reg(S::Q, Reg::RCX, Reg::RDX);
+        check_str!(e, "xor rcx, rdx");
+        e.xor_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (Reg::RCX, Reg::NoIndex, 0),
+            Reg::RDX,
+        );
+        check_str!(e, "xor qword ptr [rcx], rdx");
+        e.xor_reg_imm(S::Q, Reg::RAX, 3u32);
+        check_str!(e, "xor rax, 3");
+    }
+
+    #[test]
+    fn shl() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.shl_reg_imm(S::Q, Reg::RCX, 7);
+        check_str!(e, "shl rcx, 7");
+        e.shl_reg_imm(S::Q, Reg::RCX, 32);
+        check_str!(e, "shl rcx, 0x20");
+    }
+
+    #[test]
     fn shr() {
         let mut buf = [0u8; 0x100];
         let mut e = Emitter::new(&mut buf);
@@ -681,6 +796,21 @@ mod tests {
         check_str!(e, "je 0xffffffffffffffee");
         e.cjump(CCode::E, OffsetType::Int8, 0x0);
         check_str!(e, "je 0");
+    }
+
+    #[test]
+    fn cset() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.cset(CCode::E, Reg::AL);
+        check_str!(e, "sete al");
+        e.cset(CCode::NE, Reg::AL);
+        check_str!(e, "setne al");
+        e.cset(CCode::GE, Reg::AL);
+        check_str!(e, "setge al");
+        e.cset(CCode::GE, Reg::DL);
+        check_str!(e, "setge dl");
     }
 
     #[test]
