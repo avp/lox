@@ -5,10 +5,10 @@ var fc = 100;
 var n = 0;
 var fact = 0;
 var res = 0;
-while (lc) {
+while (lc >= 0) {
   n = fc;
   fact = n;
-  while (n) {
+  while (n > 0) {
     fact = fact * n;
     n = n - 1;
   }
