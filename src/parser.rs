@@ -209,6 +209,10 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
             match kind {
                 TokenKind::Plus | TokenKind::Minus => 1,
                 TokenKind::Star | TokenKind::Slash => 2,
+                TokenKind::Greater
+                | TokenKind::GreaterEqual
+                | TokenKind::Less
+                | TokenKind::LessEqual => 4,
                 TokenKind::EqualEqual | TokenKind::BangEqual => 4,
                 _ => 0,
             }
@@ -225,6 +229,10 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
                         TokenKind::Slash => BinOpKind::Div,
                         TokenKind::EqualEqual => BinOpKind::Equal,
                         TokenKind::BangEqual => BinOpKind::NotEqual,
+                        TokenKind::Greater => BinOpKind::Greater,
+                        TokenKind::GreaterEqual => BinOpKind::GreaterEqual,
+                        TokenKind::Less => BinOpKind::Less,
+                        TokenKind::LessEqual => BinOpKind::LessEqual,
                         _ => unreachable!(
                             "Invalid token in binop stack: {:?}",
                             op

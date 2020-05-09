@@ -163,6 +163,24 @@ impl<'buf> Emitter<'buf> {
         })
     }
 
+    fn emit_fp_dpfp(&mut self, fp: FP, opcode: u8, dst: Reg, src: Reg) {
+        if fp == FP::Double {
+            self.emit(0x66);
+        }
+        self.emit(0x0f);
+        self.emit(opcode);
+        self.emit(encode_mod_rm(AddrMode::Reg, src, dst.ord7()));
+    }
+    fn emit_fp_dprm(&mut self, fp: FP, opcode: u8, dst: Reg, src: RM) {
+        if fp == FP::Double {
+            self.emit(0x66);
+        }
+        self.emit_rex(S::L, src, dst.ord());
+        self.emit(0x0f);
+        self.emit(opcode);
+        self.emit_mod_rm(S::L, Scale::NoScale, dst.ord7(), src);
+    }
+
     fn emit_fp_fp(&mut self, fp: FP, opcode: u8, dst: Reg, src: Reg) {
         self.emit_fptype(fp);
         self.emit(0x0f);
@@ -375,6 +393,14 @@ impl<'buf> Emitter<'buf> {
         src: T,
     ) {
         self.op_rm_imm(s, scale, 0x80, 7, dst, src);
+    }
+    pub fn ucomisd_reg_reg(&mut self, dst: Reg, src: Reg) {
+        assert!(dst.is_fp() && src.is_fp());
+        self.emit_fp_dpfp(FP::Double, 0x2e, dst, src);
+    }
+    pub fn ucomisd_reg_rm(&mut self, dst: Reg, src: RM) {
+        assert!(dst.is_fp());
+        self.emit_fp_dprm(FP::Double, 0x2e, dst, src);
     }
 
     pub fn test_rm_reg(&mut self, s: S, scale: Scale, dst: RM, src: Reg) {
@@ -758,6 +784,17 @@ mod tests {
             0xabu32,
         );
         check_str!(e, "cmp dword ptr [rbx], 0xab");
+    }
+
+    #[test]
+    fn ucomisd() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.ucomisd_reg_reg(Reg::XMM0, Reg::XMM1);
+        check_str!(e, "ucomisd xmm0, xmm1");
+        e.ucomisd_reg_rm(Reg::XMM0, (Reg::RBX, Reg::NoIndex, 0));
+        check_str!(e, "ucomisd xmm0, qword ptr [rbx]");
     }
 
     #[test]

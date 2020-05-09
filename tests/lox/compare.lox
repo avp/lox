@@ -1,0 +1,32 @@
+// RUN: @lox @file
+
+print 1234;
+// CHECK: 1234
+
+print 1 < 2;
+// CHECK-NEXT: true
+print 1 < 1;
+// CHECK-NEXT: false
+print 1 < 0;
+// CHECK-NEXT: false
+
+print 1 <= 2;
+// CHECK-NEXT: true
+print 1 <= 1;
+// CHECK-NEXT: true
+print 1 <= 0;
+// CHECK-NEXT: false
+
+print 1 > 2;
+// CHECK-NEXT: false
+print 1 > 1;
+// CHECK-NEXT: false
+print 1 > 0;
+// CHECK-NEXT: true
+
+print 1 >= 2;
+// CHECK-NEXT: false
+print 1 >= 1;
+// CHECK-NEXT: true
+print 1 >= 0;
+// CHECK-NEXT: true

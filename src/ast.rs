@@ -110,6 +110,11 @@ pub enum BinOpKind {
 
     Equal,
     NotEqual,
+
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]

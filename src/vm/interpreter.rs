@@ -95,6 +95,18 @@ impl<'ast> ast::Visitor<'ast> for Interpreter<'ast> {
                         BinOpKind::Div => {
                             Value::number(l.get_number() / r.get_number())
                         }
+                        BinOpKind::Greater => {
+                            Value::bool(l.get_number() > r.get_number())
+                        }
+                        BinOpKind::GreaterEqual => {
+                            Value::bool(l.get_number() >= r.get_number())
+                        }
+                        BinOpKind::Less => {
+                            Value::bool(l.get_number() < r.get_number())
+                        }
+                        BinOpKind::LessEqual => {
+                            Value::bool(l.get_number() <= r.get_number())
+                        }
                         BinOpKind::Equal => {
                             Value::bool(l.get_number() == r.get_number())
                         }
