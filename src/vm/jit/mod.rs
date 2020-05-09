@@ -265,10 +265,9 @@ impl<'ctx, 'ast> Jit<'_, '_> {
         use ast::BinOpKind::*;
         match op {
             Add | Sub | Mul | Div => {
-                // Use rbx as temporary storage (consider it "callee-saved"
-                // in some sense).
-                // xmm0 <- to_number(x)
-                // xmm1 <- to_number(y)
+                // Use the stack as temporary storage to do:
+                // xmm0 <- check_number!(x)
+                // [rbp - scratch(0)] <- check_number!(y)
                 // op xmm0, xmm1
                 self.compile_expr(&x);
                 self.need_number(Reg::RAX);
@@ -336,6 +335,8 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                 self.e.cset(ccode, Reg::AL);
             }
             Greater | GreaterEqual | Less | LessEqual => {
+                // xmm0 <- check_number!(x)
+                // [rbp - scratch(0)] <- check_number!(y)
                 self.compile_expr(&x);
                 self.need_number(Reg::RAX);
                 self.e.pushq(Reg::RAX);
