@@ -5,12 +5,29 @@ use codespan_reporting::diagnostic::{Diagnostic, Label};
 
 pub struct SemInfo {
     pub vars: Vec<UniqueString>,
+    pub strings: Vec<UniqueString>,
 }
 
 impl SemInfo {
     pub fn find_var(&self, name: &UniqueString) -> Option<usize> {
         // TODO: Don't use linear scan for variables, that's ridiculous.
         self.vars.iter().position(|n| n == name)
+    }
+
+    pub fn find_string(&self, string: &UniqueString) -> Option<usize> {
+        // TODO: Don't use linear scan for strings, that's also ridiculous.
+        self.vars.iter().position(|n| n == string)
+    }
+
+    pub fn add_string(&mut self, string: UniqueString) -> usize {
+        match self.find_string(&string) {
+            Some(idx) => idx,
+            None => {
+                let res = self.strings.len();
+                self.strings.push(string);
+                res
+            }
+        }
     }
 }
 
@@ -44,7 +61,10 @@ impl<'ast> SemanticValidator<'ast> {
         let mut sem = SemanticValidator {
             file: None,
             file_id,
-            sem: SemInfo { vars: vec![] },
+            sem: SemInfo {
+                vars: vec![],
+                strings: vec![],
+            },
             errors: vec![],
         };
         sem.visit_func(file);
@@ -86,6 +106,9 @@ impl<'ast> Visitor<'ast> for SemanticValidator<'ast> {
                     Label::new(self.file_id, expr.span, ""),
                 )))
             }
+        }
+        if let ExprKind::StringLiteral(s) = &expr.kind {
+            self.sem.add_string(s.clone());
         }
         expr.visit_children(self);
     }

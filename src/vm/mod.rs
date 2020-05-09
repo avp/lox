@@ -1,4 +1,5 @@
 mod builtins;
+mod heap;
 mod interpreter;
 mod jit;
 mod operations;
@@ -13,6 +14,7 @@ use jit::JitContext;
 #[repr(C)]
 pub struct VMState {
     thrown_value: Value,
+    heap: heap::Heap,
 }
 
 /// VM can execute a given AST.
@@ -29,6 +31,7 @@ impl VM {
             jit: JitContext::new(dump_asm),
             state: VMState {
                 thrown_value: Value::nil(),
+                heap: heap::Heap::new(0x1000),
             },
         }
     }
