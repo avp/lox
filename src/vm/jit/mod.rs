@@ -213,7 +213,7 @@ impl<'ctx, 'ast> Jit<'_, '_> {
                     RelocKind::Int32,
                 ));
             }
-            _ => unimplemented!(),
+            other => unimplemented!("{:?}", other),
         };
     }
 
