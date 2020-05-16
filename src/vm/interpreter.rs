@@ -130,6 +130,7 @@ impl<'ast> ast::Visitor<'ast> for Interpreter<'ast> {
                         UnOpKind::Neg => unimplemented!(),
                         UnOpKind::Not => Value::bool(!val.get_bool()),
                     },
+                    Tag::LoxString => unimplemented!(),
                 };
                 Ok(result)
             }

@@ -3,6 +3,7 @@ mod heap;
 mod interpreter;
 mod jit;
 mod operations;
+mod string_table;
 mod value;
 
 pub use value::Value;
@@ -10,11 +11,13 @@ pub use value::Value;
 use crate::ast;
 use crate::sem::SemInfo;
 use jit::JitContext;
+use string_table::StringTable;
 
 #[repr(C)]
 pub struct VMState {
     thrown_value: Value,
     heap: heap::Heap,
+    string_table: StringTable,
 }
 
 /// VM can execute a given AST.
@@ -32,6 +35,7 @@ impl VM {
             state: VMState {
                 thrown_value: Value::nil(),
                 heap: heap::Heap::new(0x1000),
+                string_table: StringTable::new(),
             },
         }
     }
@@ -41,7 +45,7 @@ impl VM {
         ast: ast::P<ast::Func>,
         sem: &SemInfo,
     ) -> Option<Value> {
-        let fun_opt = self.jit.compile(&ast, sem);
+        let fun_opt = JitContext::compile(self, &ast, sem);
         let result = match fun_opt {
             Some(fun) => fun(&mut self.state as *mut VMState),
             _ => interpreter::Interpreter::run(&ast, sem),

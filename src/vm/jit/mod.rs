@@ -6,6 +6,7 @@ use crate::ctx::UniqueString;
 use crate::sem::SemInfo;
 
 use super::builtins;
+use super::heap::*;
 use super::value;
 use super::VMState;
 use super::Value;
@@ -28,12 +29,12 @@ impl JitContext {
     }
 
     pub fn compile(
-        &mut self,
+        vm: &mut super::VM,
         ast: &ast::Func,
         sem: &SemInfo,
     ) -> Option<fn(*mut VMState) -> Value> {
-        let dump = self.dump_asm;
-        let mut jit = Jit::new(self, ast, sem);
+        let dump = vm.jit.dump_asm;
+        let mut jit = Jit::new(vm, ast, sem);
         let result = jit.compile()?;
         if dump {
             jit.dump();
@@ -75,6 +76,7 @@ impl Reloc {
 /// Compiles a global function.
 /// Construct a new instance for each function you want to compile.
 struct Jit<'ctx, 'ast> {
+    vm: &'ctx mut super::VM,
     e: emitter::Emitter<'ctx>,
     func: &'ast ast::Func,
     sem: &'ast SemInfo,
@@ -85,12 +87,13 @@ struct Jit<'ctx, 'ast> {
 
 impl<'ctx, 'ast> Jit<'_, '_> {
     fn new(
-        ctx: &'ctx mut JitContext,
+        vm: &'ctx mut super::VM,
         func: &'ast ast::Func,
         sem: &'ast SemInfo,
     ) -> Jit<'ctx, 'ast> {
-        let buf: &'ctx mut [u8] = (&mut ctx.heap).alloc(4096);
+        let buf: &'ctx mut [u8] = (&mut vm.jit.heap).alloc(4096);
         Jit {
+            vm,
             e: emitter::Emitter::new(&mut *buf),
             func,
             sem,
@@ -173,7 +176,8 @@ impl<'ctx, 'ast> Jit<'_, '_> {
             StmtKind::Expr(expr) => self.compile_expr(&expr),
             StmtKind::Print(expr) => {
                 self.compile_expr(&expr);
-                self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
+                self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
+                self.e.mov_reg_reg(S::Q, Reg::RSI, Reg::RAX);
                 self.call_builtin(builtins::println);
             }
             StmtKind::While(cond, body) => {
@@ -181,7 +185,8 @@ impl<'ctx, 'ast> Jit<'_, '_> {
 
                 // rax <- to_bool(cond)
                 self.compile_expr(&cond);
-                self.e.mov_reg_reg(S::Q, Reg::RDI, Reg::RAX);
+                self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
+                self.e.mov_reg_reg(S::Q, Reg::RSI, Reg::RAX);
                 self.call_builtin(builtins::to_bool);
 
                 // Check bottom bits of rax to see if the bool is true or false.
@@ -239,6 +244,15 @@ impl<'ctx, 'ast> Jit<'_, '_> {
             }
             &NumberLiteral(x) => {
                 self.e.mov_reg_imm(Reg::RAX, Value::number(x).raw());
+            }
+            StringLiteral(id) => {
+                let s: &str = &*id;
+                let ptr = LoxString::new(&mut self.vm.state.heap, s);
+                let idx: u32 = self.vm.state.string_table.add(ptr);
+                self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
+                self.e
+                    .mov_reg_imm(Reg::RSI, Value::number(idx as f64).raw());
+                self.call_builtin(builtins::load_loxstring);
             }
             BinOp(op, x, y) => {
                 self.compile_binop(*op, x, y);

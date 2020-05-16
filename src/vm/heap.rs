@@ -48,7 +48,7 @@ pub enum CellKind {
 }
 
 pub trait Cell {
-    fn get_kind(&self) -> CellKind;
+    fn get_kind() -> CellKind;
 }
 
 #[repr(C)]
@@ -59,7 +59,7 @@ pub struct LoxString {
 }
 
 impl Cell for LoxString {
-    fn get_kind(&self) -> CellKind {
+    fn get_kind() -> CellKind {
         CellKind::LoxString
     }
 }
@@ -70,7 +70,17 @@ impl LoxString {
         string: &str,
     ) -> &'heap mut LoxString {
         let ptr: *mut u8 = heap.alloc(Self::alloc_size(string.len()));
-        unsafe { std::mem::transmute(ptr) }
+        let len = string.as_bytes().len();
+        let refn: &mut LoxString = unsafe { std::mem::transmute(ptr) };
+        refn.kind = Self::get_kind();
+        refn.len = len;
+        unsafe {
+            let data: *mut u8 = std::mem::transmute(
+                ptr.offset(offset_of!(Self, data) as isize),
+            );
+            std::ptr::copy(string.as_ptr(), data, len);
+            std::mem::transmute(ptr)
+        }
     }
 
     pub fn data<'heap>(&'heap self) -> &str {
@@ -84,6 +94,6 @@ impl LoxString {
 
     fn alloc_size(len: usize) -> usize {
         use std::mem::size_of;
-        size_of::<CellKind>() + size_of::<usize>() + len * size_of::<u8>()
+        offset_of!(Self, data) + len * size_of::<u8>()
     }
 }

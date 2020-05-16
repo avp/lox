@@ -1,3 +1,5 @@
+use super::heap::*;
+
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -10,6 +12,7 @@ pub enum Tag {
     Nil,
     Bool,
     Number,
+    LoxString,
 }
 
 const NUM_TAG_BITS: u64 = 16;
@@ -17,8 +20,9 @@ pub const NUM_DATA_BITS: u64 = 64 - NUM_TAG_BITS;
 
 pub const NIL_TAG: u64 = 0xfff9;
 pub const BOOL_TAG: u64 = 0xfff8;
+pub const LOXSTRING_TAG: u64 = 0xfff7;
 
-pub const LAST_TAG: u64 = 0xfff8;
+pub const LAST_TAG: u64 = 0xfff7;
 
 impl Value {
     fn with_tag(val: u64, tag: u64) -> Value {
@@ -39,10 +43,15 @@ impl Value {
         Value { raw: num.to_bits() }
     }
 
+    pub fn loxstring(ptr: *mut LoxString) -> Value {
+        Value::with_tag(ptr as u64, LOXSTRING_TAG)
+    }
+
     pub fn get_tag(&self) -> Tag {
         match self.raw >> NUM_DATA_BITS {
             self::NIL_TAG => Tag::Nil,
             self::BOOL_TAG => Tag::Bool,
+            self::LOXSTRING_TAG => Tag::LoxString,
             _ => Tag::Number,
         }
     }
@@ -55,6 +64,11 @@ impl Value {
     pub fn get_number(&self) -> f64 {
         assert_eq!(self.get_tag(), Tag::Number);
         f64::from_bits(self.raw)
+    }
+
+    pub fn get_loxstring(&self) -> *mut LoxString {
+        assert_eq!(self.get_tag(), Tag::LoxString);
+        self.strip_tag() as *mut LoxString
     }
 
     pub fn raw(&self) -> u64 {
@@ -72,6 +86,9 @@ impl fmt::Display for Value {
             Tag::Number => write!(f, "{}", self.get_number())?,
             Tag::Nil => write!(f, "<nil>")?,
             Tag::Bool => write!(f, "{}", self.get_bool())?,
+            Tag::LoxString => {
+                write!(f, "{}", unsafe { (&*self.get_loxstring()).data() })?
+            }
         }
         Ok(())
     }

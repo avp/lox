@@ -1,0 +1,6 @@
+// RUN: @lox @file
+
+print "asdf";
+// CHECK: asdf
+print "abc";
+// CHECK: abc
