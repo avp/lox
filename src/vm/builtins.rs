@@ -20,6 +20,6 @@ pub extern "C" fn println(_state: &mut VMState, val: Value) -> Value {
 
 pub extern "C" fn load_loxstring(state: &mut VMState, val: Value) -> Value {
     let idx = val.get_number() as u32;
-    let ptr: *mut LoxString = state.string_table.get(idx);
+    let ptr: *const LoxString = state.string_table.get(idx);
     Value::loxstring(ptr)
 }

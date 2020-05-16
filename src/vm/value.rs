@@ -43,7 +43,7 @@ impl Value {
         Value { raw: num.to_bits() }
     }
 
-    pub fn loxstring(ptr: *mut LoxString) -> Value {
+    pub fn loxstring(ptr: *const LoxString) -> Value {
         Value::with_tag(ptr as u64, LOXSTRING_TAG)
     }
 
@@ -66,9 +66,9 @@ impl Value {
         f64::from_bits(self.raw)
     }
 
-    pub fn get_loxstring(&self) -> *mut LoxString {
+    pub fn get_loxstring(&self) -> *const LoxString {
         assert_eq!(self.get_tag(), Tag::LoxString);
-        self.strip_tag() as *mut LoxString
+        self.strip_tag() as *const LoxString
     }
 
     pub fn raw(&self) -> u64 {
