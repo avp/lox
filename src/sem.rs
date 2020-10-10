@@ -3,8 +3,14 @@ use crate::ctx::UniqueString;
 
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 
+/// Store semantic information about the program.
 pub struct SemInfo {
+    /// Variable names as a list.
+    /// The index in the list can be found via `find_var`.
     pub vars: Vec<UniqueString>,
+
+    /// Strings in the program as a list.
+    /// The index in the list can be found via `find_string`.
     pub strings: Vec<UniqueString>,
 }
 

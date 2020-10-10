@@ -1,5 +1,7 @@
 use std::alloc::{alloc, dealloc, Layout};
 
+use crate::vm::Value;
+
 #[repr(C)]
 pub struct Heap {
     start: *mut u8,
@@ -45,6 +47,7 @@ enum HeapData {}
 #[repr(C)]
 pub enum CellKind {
     LoxString,
+    Environment,
 }
 
 pub trait Cell {
@@ -95,5 +98,61 @@ impl LoxString {
     fn alloc_size(len: usize) -> usize {
         use std::mem::size_of;
         offset_of!(Self, data) + len * size_of::<u8>()
+    }
+}
+
+#[repr(C)]
+pub struct Environment {
+    pub kind: CellKind,
+    pub size: usize,
+    data: HeapData,
+}
+
+impl Cell for Environment {
+    fn get_kind() -> CellKind {
+        CellKind::Environment
+    }
+}
+
+impl Environment {
+    pub fn new<'heap>(
+        heap: &'heap mut Heap,
+        size: usize,
+    ) -> &'heap mut Environment {
+        let ptr: *mut u8 = heap.alloc(Self::alloc_size(size));
+        let refn: &mut Environment = unsafe { std::mem::transmute(ptr) };
+        refn.kind = Self::get_kind();
+        refn.size = size;
+
+        unsafe {
+            let data = std::slice::from_raw_parts_mut(
+                std::mem::transmute(
+                    ptr.offset(offset_of!(Self, data) as isize),
+                ),
+                size,
+            );
+            #[cfg(debug_assertions)]
+            for i in 0..size {
+                data[i] = Value::nil();
+            }
+            std::mem::transmute(ptr)
+        }
+    }
+
+    pub fn at<'heap>(&'heap self, idx: usize) -> Value {
+        unsafe {
+            let top: *const u8 = std::mem::transmute(self as *const Self);
+            let data: *const Value = std::mem::transmute(
+                top.offset(offset_of!(Self, data) as isize),
+            );
+            let slice: &[Value] =
+                std::slice::from_raw_parts::<Value>(data, self.size);
+            slice[idx].clone()
+        }
+    }
+
+    fn alloc_size(size: usize) -> usize {
+        use std::mem::size_of;
+        offset_of!(Self, data) + size * size_of::<usize>()
     }
 }
