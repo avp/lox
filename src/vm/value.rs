@@ -3,11 +3,13 @@ use super::heap::*;
 use std::fmt;
 
 #[derive(Debug, Clone)]
+#[repr(C)]
 pub struct Value {
     raw: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[repr(C)]
 pub enum Tag {
     Nil,
     Bool,
