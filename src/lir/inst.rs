@@ -1,3 +1,5 @@
+use super::BasicBlockIdx;
+
 /// A "virtual" register, in contrast to actual CPU registers.
 pub struct VReg(u32);
 
@@ -33,4 +35,9 @@ pub enum Opcode {
     LoadNumber(VReg, f64),
     /// dest <- bool op
     LoadBool(VReg, bool),
+
+    /// Unconditionally jump to the target block.
+    Branch(BasicBlockIdx),
+    /// Jump to the target block if the op is true-ish.
+    CondBranch(VReg, BasicBlockIdx),
 }
