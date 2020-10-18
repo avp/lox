@@ -1,12 +1,15 @@
 use super::BasicBlockIdx;
 
 /// A "virtual" register, in contrast to actual CPU registers.
+#[derive(Debug, Copy, Clone)]
 pub struct VReg(u32);
 
+#[derive(Debug)]
 pub struct Inst {
     pub opcode: Opcode,
 }
 
+#[derive(Debug)]
 pub enum Opcode {
     /// dest <- op1 + op2
     Add(VReg, VReg, VReg),
