@@ -13,16 +13,19 @@ struct Generator<'ctx> {
 
 impl<'ctx> Generator<'ctx> {
     pub fn gen(ctx: &'ctx mut Ctx, func: Func) -> Program<'ctx> {
-        let generator = Self::new(ctx, func);
-        unimplemented!();
+        let mut generator = Self::new(ctx);
+        generator.run(func);
+        generator.builder.eject_program()
     }
 
-    fn new(ctx: &'ctx mut Ctx, func: Func) -> Generator<'ctx> {
+    fn new(ctx: &'ctx mut Ctx) -> Generator<'ctx> {
         let builder = Builder::new(ctx);
         Generator { ctx, builder }
     }
 
-    fn run() {}
+    fn run(&mut self, func: Func) {
+        unimplemented!()
+    }
 }
 
 struct Builder<'ctx> {
@@ -41,6 +44,10 @@ impl<'ctx> Builder<'ctx> {
             function_idx,
             block_idx,
         }
+    }
+
+    pub fn eject_program(self) -> Program<'ctx> {
+        self.program
     }
 
     pub fn make_function(&mut self) -> FunctionIdx {
