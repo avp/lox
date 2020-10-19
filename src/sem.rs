@@ -38,7 +38,7 @@ impl SemInfo {
 }
 
 pub struct SemanticValidator<'ast> {
-    file: Option<&'ast Func>,
+    file: Option<&'ast Function>,
     file_id: codespan::FileId,
     sem: SemInfo,
     errors: Vec<SemError>,
@@ -63,7 +63,10 @@ impl SemError {
 }
 
 impl<'ast> SemanticValidator<'ast> {
-    pub fn run(file: &'ast Func, file_id: codespan::FileId) -> Result<SemInfo> {
+    pub fn run(
+        file: &'ast Function,
+        file_id: codespan::FileId,
+    ) -> Result<SemInfo> {
         let mut sem = SemanticValidator {
             file: None,
             file_id,
@@ -84,7 +87,7 @@ impl<'ast> SemanticValidator<'ast> {
 impl<'ast> Visitor<'ast> for SemanticValidator<'ast> {
     type Output = ();
 
-    fn visit_func(&mut self, file: &'ast Func) {
+    fn visit_func(&mut self, file: &'ast Function) {
         self.file = Some(file);
         file.visit_children(self);
     }

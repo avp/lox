@@ -2,7 +2,7 @@ use super::BasicBlockIdx;
 
 /// A "virtual" register, in contrast to actual CPU registers.
 #[derive(Debug, Copy, Clone)]
-pub struct VReg(u32);
+pub struct VReg(pub u32);
 
 #[derive(Debug)]
 pub struct Inst {

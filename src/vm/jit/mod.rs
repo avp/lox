@@ -30,7 +30,7 @@ impl JitContext {
 
     pub fn compile(
         vm: &mut super::VM,
-        ast: &ast::Func,
+        ast: &ast::Function,
         sem: &SemInfo,
     ) -> Option<fn(*mut VMState) -> Value> {
         let dump = vm.jit.dump_asm;
@@ -78,7 +78,7 @@ impl Reloc {
 struct Jit<'ctx, 'ast> {
     vm: &'ctx mut super::VM,
     e: emitter::Emitter<'ctx>,
-    func: &'ast ast::Func,
+    func: &'ast ast::Function,
     sem: &'ast SemInfo,
     /// Mapping from "label name" to address of label (as offset in emitter).
     labels: HashMap<Label, usize>,
@@ -88,7 +88,7 @@ struct Jit<'ctx, 'ast> {
 impl<'ctx, 'ast> Jit<'_, '_> {
     fn new(
         vm: &'ctx mut super::VM,
-        func: &'ast ast::Func,
+        func: &'ast ast::Function,
         sem: &'ast SemInfo,
     ) -> Jit<'ctx, 'ast> {
         let buf: &'ctx mut [u8] = (&mut vm.jit.heap).alloc(4096);

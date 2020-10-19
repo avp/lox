@@ -34,7 +34,7 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
         ctx: &'ctx mut Ctx,
         files: &codespan::Files<&'src str>,
         file_id: codespan::FileId,
-    ) -> Result<P<Func>> {
+    ) -> Result<P<Function>> {
         let mut parser = Parser {
             lexer: Lexer::new(ctx, files.source(file_id)),
             file_id,
@@ -90,7 +90,7 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
         }
     }
 
-    fn parse_func(&mut self) -> Result<P<Func>> {
+    fn parse_func(&mut self) -> Result<P<Function>> {
         let mut decls = vec![];
         while !self.check(TokenKind::Eof) {
             decls.push(self.parse_decl()?);
@@ -99,7 +99,7 @@ impl<'ctx, 'src> Parser<'ctx, 'src> {
             Some(d) => d.span.merge(decls.last().unwrap().span),
             None => Span::initial(),
         };
-        Ok(P::new(Func {
+        Ok(P::new(Function {
             params: vec![],
             body: P::new(Block { decls, span }),
             span,

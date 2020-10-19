@@ -8,20 +8,20 @@ pub trait Visitable<'ast> {
 }
 
 pub trait ASTNode {}
-impl ASTNode for Func {}
+impl ASTNode for Function {}
 impl ASTNode for Block {}
 impl ASTNode for Decl {}
 impl ASTNode for Stmt {}
 impl ASTNode for Expr {}
 
 #[derive(Debug)]
-pub struct Func {
+pub struct Function {
     pub params: Vec<UniqueString>,
     pub body: P<Block>,
     pub span: Span,
 }
 
-impl<'ast> Visitable<'ast> for Func {
+impl<'ast> Visitable<'ast> for Function {
     fn visit_children<T>(&'ast self, v: &mut dyn Visitor<'ast, Output = T>) {
         v.visit_block(&self.body);
     }
@@ -164,7 +164,7 @@ impl<'ast> Visitable<'ast> for Expr {
 
 pub trait Visitor<'ast> {
     type Output;
-    fn visit_func(&mut self, file: &'ast Func) -> Self::Output;
+    fn visit_func(&mut self, file: &'ast Function) -> Self::Output;
     fn visit_block(&mut self, block: &'ast Block) -> Self::Output;
     fn visit_decl(&mut self, decl: &'ast Decl) -> Self::Output;
     fn visit_stmt(&mut self, stmt: &'ast Stmt) -> Self::Output;

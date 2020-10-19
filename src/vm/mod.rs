@@ -42,7 +42,7 @@ impl VM {
 
     pub fn run(
         &mut self,
-        ast: ast::P<ast::Func>,
+        ast: ast::P<ast::Function>,
         sem: &SemInfo,
     ) -> Option<Value> {
         let fun_opt = JitContext::compile(self, &ast, sem);

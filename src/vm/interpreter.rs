@@ -10,7 +10,7 @@ pub struct Interpreter<'ast> {
 }
 
 impl<'ast> Interpreter<'ast> {
-    pub fn run(file: &'ast ast::Func, sem: &'ast SemInfo) -> Value {
+    pub fn run(file: &'ast ast::Function, sem: &'ast SemInfo) -> Value {
         let mut int = Interpreter {
             sem,
             vars: vec![Value::nil(); sem.vars.len()],
@@ -30,7 +30,7 @@ type InterpResult = std::result::Result<Value, Value>;
 
 impl<'ast> ast::Visitor<'ast> for Interpreter<'ast> {
     type Output = InterpResult;
-    fn visit_func(&mut self, func: &'ast ast::Func) -> InterpResult {
+    fn visit_func(&mut self, func: &'ast ast::Function) -> InterpResult {
         self.visit_block(&func.body)
     }
 
