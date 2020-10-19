@@ -14,12 +14,10 @@ struct Generator<'ctx> {
     builder: Builder<'ctx>,
 
     name_table: HashMap<UniqueString, VReg>,
-
-    next_vreg: VReg,
 }
 
 impl<'ctx> Generator<'ctx> {
-    pub fn gen(ctx: &'ctx Ctx, func: ast::Function) -> Program<'ctx> {
+    pub fn gen(ctx: &'ctx Ctx, func: &ast::Function) -> Program<'ctx> {
         let mut generator = Self::new(ctx);
         generator.run(func);
         generator.builder.eject_program()
@@ -31,18 +29,15 @@ impl<'ctx> Generator<'ctx> {
             ctx,
             builder,
             name_table: HashMap::new(),
-            next_vreg: VReg(0),
         }
     }
 
-    fn run(&mut self, func: ast::Function) {
+    fn run(&mut self, func: &ast::Function) {
         self.gen_function(&func);
     }
 
     fn alloc_vreg(&mut self) -> VReg {
-        let result = self.next_vreg;
-        self.next_vreg = VReg(result.0 + 1);
-        result
+        VReg(self.builder.alloc_stack_reg())
     }
 
     fn gen_function(&mut self, node: &ast::Function) {
@@ -116,12 +111,26 @@ impl<'ctx> Builder<'ctx> {
         self.program
     }
 
+    pub fn alloc_stack_reg(&mut self) -> u32 {
+        let res = self.get_function_mut().stack_size;
+        self.get_function_mut().stack_size += 1;
+        res
+    }
+
     pub fn make_function(&mut self) -> FunctionIdx {
         self.program.new_function()
     }
 
     pub fn set_function(&mut self, function_idx: FunctionIdx) {
         self.function_idx = function_idx
+    }
+
+    pub fn get_function(&self) -> &Function {
+        self.program.get_function(self.function_idx)
+    }
+
+    pub fn get_function_mut(&mut self) -> &mut Function {
+        self.program.get_function_mut(self.function_idx)
     }
 
     pub fn make_block(&mut self) -> BasicBlockIdx {
@@ -139,14 +148,13 @@ impl<'ctx> Builder<'ctx> {
     }
 
     pub fn make_inst(&mut self, inst: Inst) {
-        let mut block = self.get_block_mut();
-        block.insts.push(inst);
+        self.get_block_mut().insts.push(inst);
     }
 }
 
 pub fn generate_lir<'ctx>(
     ctx: &'ctx Ctx,
-    func: ast::Function,
+    func: &'ctx ast::Function,
 ) -> Program<'ctx> {
     Generator::gen(ctx, func)
 }

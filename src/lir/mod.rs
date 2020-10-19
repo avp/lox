@@ -34,6 +34,10 @@ impl<'ctx> Program<'ctx> {
         &self.functions[0]
     }
 
+    pub fn get_functions(&self) -> &[Function] {
+        &self.functions
+    }
+
     #[inline]
     pub fn get_function(&self, i: FunctionIdx) -> &Function {
         &self.functions[i.0]
@@ -52,11 +56,17 @@ pub struct FunctionIdx(usize);
 pub struct Function {
     /// List of basic blocks, where the first block is the entry point.
     blocks: Vec<BasicBlock>,
+
+    /// Number of VRegs needed to run this Function.
+    stack_size: u32,
 }
 
 impl Function {
     pub fn new() -> Function {
-        Function { blocks: vec![] }
+        Function {
+            blocks: vec![],
+            stack_size: 0,
+        }
     }
 
     pub fn new_block(&mut self) -> BasicBlockIdx {

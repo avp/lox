@@ -31,6 +31,9 @@ struct Opt {
     #[clap(long, help = "Dump the AST")]
     dump_ast: bool,
 
+    #[clap(long, help = "Dump LIR")]
+    dump_lir: bool,
+
     #[clap(long, help = "Dump JIT assembly")]
     dump_asm: bool,
 
@@ -70,6 +73,10 @@ fn run(
                     Err(format_err!("Validation failed"))
                 }
                 Ok(sem) => {
+                    if opt.dump_lir {
+                        let lir = lir::generate_lir(&ctx, &ast);
+                        println!("{:?}", lir.get_functions());
+                    }
                     let mut vm = vm::VM::new(opt.dump_asm);
                     match vm.run(ast, &sem) {
                         None => Err(failure::err_msg("")),
