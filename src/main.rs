@@ -73,12 +73,12 @@ fn run(
                     Err(format_err!("Validation failed"))
                 }
                 Ok(sem) => {
+                    let lir = lir::generate_lir(&ctx, &ast);
                     if opt.dump_lir {
-                        let lir = lir::generate_lir(&ctx, &ast);
                         println!("{:?}", lir.get_functions());
                     }
                     let mut vm = vm::VM::new(opt.dump_asm);
-                    match vm.run(ast, &sem) {
+                    match vm.run(lir) {
                         None => Err(failure::err_msg("")),
                         _ => Ok(()),
                     }

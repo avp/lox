@@ -3,6 +3,7 @@ mod mem;
 
 use crate::ast;
 use crate::ctx::UniqueString;
+use crate::lir;
 use crate::sem::SemInfo;
 
 use super::builtins;
@@ -30,16 +31,16 @@ impl JitContext {
 
     pub fn compile(
         vm: &mut super::VM,
-        ast: &ast::Function,
-        sem: &SemInfo,
+        lir: &lir::Program,
     ) -> Option<fn(*mut VMState) -> Value> {
-        let dump = vm.jit.dump_asm;
-        let mut jit = Jit::new(vm, ast, sem);
-        let result = jit.compile()?;
-        if dump {
-            jit.dump();
-        }
-        Some(result)
+        None
+        // let dump = vm.jit.dump_asm;
+        // let mut jit = Jit::new(vm, ast, sem);
+        // let result = jit.compile()?;
+        // if dump {
+        //     jit.dump();
+        // }
+        // Some(result)
     }
 }
 
