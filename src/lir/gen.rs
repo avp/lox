@@ -6,6 +6,8 @@ use super::inst::*;
 use super::*;
 use crate::ast;
 
+use super::inst::Opcode::*;
+
 struct Generator<'ctx> {
     ctx: &'ctx Ctx,
 
@@ -69,12 +71,29 @@ impl<'ctx> Generator<'ctx> {
                 };
                 self.name_table.insert(name.clone(), vreg);
             }
-            ast::DeclKind::Stmt(stmt) => unimplemented!(),
+            ast::DeclKind::Stmt(stmt) => self.gen_stmt(stmt),
         }
     }
 
+    fn gen_stmt(&mut self, node: &ast::Stmt) {
+        match &node.kind {
+            ast::StmtKind::Print(expr) => {
+                let vreg = self.gen_expr(expr);
+                self.builder.make_inst(Inst::opcode(Print(vreg)));
+            }
+            _ => unimplemented!(),
+        };
+    }
+
     fn gen_expr(&mut self, node: &ast::Expr) -> VReg {
-        unimplemented!();
+        match &node.kind {
+            ast::ExprKind::NumberLiteral(n) => {
+                let vreg = self.alloc_vreg();
+                self.builder.make_inst(Inst::opcode(LoadNumber(vreg, *n)));
+                vreg
+            }
+            _ => unimplemented!(),
+        }
     }
 }
 

@@ -9,6 +9,12 @@ pub struct Inst {
     pub opcode: Opcode,
 }
 
+impl Inst {
+    pub fn opcode(opcode: Opcode) -> Inst {
+        Inst { opcode }
+    }
+}
+
 #[derive(Debug)]
 pub enum Opcode {
     /// dest <- op1 + op2
@@ -43,4 +49,22 @@ pub enum Opcode {
     Branch(BasicBlockIdx),
     /// Jump to the target block if the op is true-ish.
     CondBranch(VReg, BasicBlockIdx),
+
+    /// Print the op.
+    Print(VReg),
+
+    /// Return the op.
+    Ret(VReg),
+}
+
+impl Inst {
+    pub fn is_terminator(&self) -> bool {
+        use Opcode::*;
+        match &self.opcode {
+            Branch(_) => true,
+            CondBranch(_, _) => true,
+            Ret(_) => true,
+            _ => false,
+        }
+    }
 }
