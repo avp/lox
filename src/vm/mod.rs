@@ -63,10 +63,10 @@ impl VM {
     }
 
     pub fn run<'ctx>(&mut self, lir: lir::Program<'ctx>) -> Option<Value> {
-        let fun_opt = JitContext::compile(self, &lir);
+        let fun_opt = JitContext::compile(self, lir.get_global_function());
         let result = match fun_opt {
             Some(fun) => fun(&mut self.state as *mut VMState),
-            _ => interpreter::run(&mut self.state, &lir),
+            _ => interpreter::run(&mut self.state, lir.get_global_function()),
         };
 
         if self.state.thrown_value.get_tag() != value::Tag::Nil {
