@@ -4,7 +4,7 @@
 use crate::ctx::{Ctx, UniqueString};
 
 mod inst;
-pub use inst::{Inst, Opcode};
+pub use inst::{Inst, Opcode, VReg};
 
 mod gen;
 pub use gen::generate_lir;
@@ -76,6 +76,16 @@ impl Function {
     }
 
     #[inline]
+    pub fn get_stack_size(&self) -> u32 {
+        self.stack_size
+    }
+
+    #[inline]
+    pub fn get_entry_block(&self) -> &BasicBlock {
+        &self.blocks[0]
+    }
+
+    #[inline]
     pub fn get_block(&self, i: BasicBlockIdx) -> &BasicBlock {
         &self.blocks[i.0]
     }
@@ -97,5 +107,9 @@ pub struct BasicBlock {
 impl BasicBlock {
     pub fn new() -> BasicBlock {
         BasicBlock { insts: vec![] }
+    }
+
+    pub fn insts(&self) -> &[Inst] {
+        &self.insts
     }
 }

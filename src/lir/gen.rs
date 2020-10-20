@@ -47,8 +47,11 @@ impl<'ctx> Generator<'ctx> {
         self.builder.set_block(block);
 
         // TODO: Emit parameters
-
         self.gen_block(&node.body);
+
+        let ret_reg = self.alloc_vreg();
+        self.builder.make_inst(LoadNil(ret_reg));
+        self.builder.make_inst(Ret(ret_reg));
     }
 
     fn gen_block(&mut self, node: &ast::Block) {
@@ -74,7 +77,7 @@ impl<'ctx> Generator<'ctx> {
         match &node.kind {
             ast::StmtKind::Print(expr) => {
                 let vreg = self.gen_expr(expr);
-                self.builder.make_inst(Inst::opcode(Print(vreg)));
+                self.builder.make_inst(Print(vreg));
             }
             _ => unimplemented!(),
         };
@@ -84,7 +87,7 @@ impl<'ctx> Generator<'ctx> {
         match &node.kind {
             ast::ExprKind::NumberLiteral(n) => {
                 let vreg = self.alloc_vreg();
-                self.builder.make_inst(Inst::opcode(LoadNumber(vreg, *n)));
+                self.builder.make_inst(LoadNumber(vreg, *n));
                 vreg
             }
             _ => unimplemented!(),
@@ -147,8 +150,8 @@ impl<'ctx> Builder<'ctx> {
             .get_block_mut(self.block_idx)
     }
 
-    pub fn make_inst(&mut self, inst: Inst) {
-        self.get_block_mut().insts.push(inst);
+    pub fn make_inst(&mut self, opcode: Opcode) {
+        self.get_block_mut().insts.push(Inst::opcode(opcode));
     }
 }
 

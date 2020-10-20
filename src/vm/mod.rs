@@ -9,11 +9,8 @@ mod value;
 pub use value::Value;
 
 use crate::lir;
-use crate::sem::SemInfo;
 use jit::JitContext;
 use string_table::StringTable;
-
-use std::mem::{self, MaybeUninit};
 
 const STACK_SIZE: usize = 0x1000;
 
@@ -24,6 +21,15 @@ pub struct VMState {
     string_table: StringTable,
     stack: Box<[Value; STACK_SIZE]>,
     sp: usize,
+}
+
+impl VMState {
+    pub fn alloc_stack(&mut self, size: u32) -> &mut [Value] {
+        let size = size as usize;
+        assert!(self.sp > size, "Stack overflow");
+        self.sp -= size;
+        &mut self.stack[self.sp..self.sp + size]
+    }
 }
 
 /// VM can execute a given AST.
@@ -56,11 +62,11 @@ impl VM {
         }
     }
 
-    pub fn run<'ctx>(&mut self, ast: lir::Program<'ctx>) -> Option<Value> {
-        let fun_opt = JitContext::compile(self, &ast);
+    pub fn run<'ctx>(&mut self, lir: lir::Program<'ctx>) -> Option<Value> {
+        let fun_opt = JitContext::compile(self, &lir);
         let result = match fun_opt {
             Some(fun) => fun(&mut self.state as *mut VMState),
-            _ => interpreter::run(&mut self.state),
+            _ => interpreter::run(&mut self.state, &lir),
         };
 
         if self.state.thrown_value.get_tag() != value::Tag::Nil {
