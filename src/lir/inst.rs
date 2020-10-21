@@ -50,8 +50,8 @@ pub enum Opcode {
 
     /// Unconditionally jump to the target block.
     Branch(BasicBlockIdx),
-    /// Jump to the target block if the op is true-ish.
-    CondBranch(VReg, BasicBlockIdx),
+    /// (condition, true block, false block)
+    CondBranch(VReg, BasicBlockIdx, BasicBlockIdx),
 
     /// Print the op.
     Print(VReg),
@@ -64,9 +64,9 @@ impl Inst {
     pub fn is_terminator(&self) -> bool {
         use Opcode::*;
         match &self.opcode {
-            Branch(_) => true,
-            CondBranch(_, _) => true,
-            Ret(_) => true,
+            Branch(..) => true,
+            CondBranch(..) => true,
+            Ret(..) => true,
             _ => false,
         }
     }

@@ -136,14 +136,17 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     }
 
     fn compile_function(&mut self, function: &lir::Function) {
-        unimplemented!();
+        self.compile_block(function.get_entry_block());
     }
 
-    fn compile_block(&mut self, block: &ast::Block) {
+    fn compile_block(&mut self, block: &lir::BasicBlock) {
+        for inst in block.insts() {
+            self.compile_inst(inst);
+        }
+    }
+
+    fn compile_inst(&mut self, inst: &lir::Inst) {
         unimplemented!();
-        // for decl in &block.decls {
-        //     self.compile_decl(decl);
-        // }
     }
 
     fn compile_decl(&mut self, decl: &ast::Decl) {
