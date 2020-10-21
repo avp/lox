@@ -1,9 +1,11 @@
 mod emitter;
 mod mem;
+mod regalloc;
 
 use crate::ast;
 use crate::ctx::UniqueString;
 use crate::lir;
+use crate::lir::VReg;
 use crate::sem::SemInfo;
 
 use super::builtins;
@@ -79,6 +81,7 @@ struct Jit<'ctx, 'lir> {
     vm: &'ctx mut super::VM,
     e: emitter::Emitter<'ctx>,
     lir: &'lir lir::Function,
+    alloc_map: Vec<regalloc::Slot>,
     /// Mapping from "label name" to address of label (as offset in emitter).
     labels: HashMap<Label, usize>,
     relocs: Vec<Reloc>,
@@ -90,10 +93,12 @@ impl<'ctx, 'lir> Jit<'_, '_> {
         lir: &'lir lir::Function,
     ) -> Jit<'ctx, 'lir> {
         let buf: &'ctx mut [u8] = (&mut vm.jit.heap).alloc(4096);
+        let alloc_map = regalloc::reg_alloc(lir);
         Jit {
             vm,
             e: emitter::Emitter::new(&mut *buf),
             lir,
+            alloc_map,
             labels: HashMap::new(),
             relocs: vec![],
         }
@@ -127,7 +132,6 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     const NUM_SCRATCH_SLOTS: u32 = 1;
 
     pub fn compile(&mut self) -> Option<fn(*mut VMState) -> Value> {
-        return None;
         self.emit_prologue();
         self.compile_function(self.lir);
         self.emit_epilogue();
@@ -146,7 +150,24 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     }
 
     fn compile_inst(&mut self, inst: &lir::Inst) {
-        unimplemented!();
+        use lir::Opcode::*;
+        match inst.opcode {
+            Ret(reg) => {
+                self.mov_reg_vreg(Reg::RAX, reg);
+            }
+            LoadNil(reg) => {
+                self.mov_vreg_imm(reg, Value::nil());
+            }
+            LoadNumber(reg, n) => {
+                self.mov_vreg_imm(reg, Value::number(n));
+            }
+            Print(reg) => {
+                self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
+                self.mov_reg_vreg(Reg::RSI, reg);
+                self.call_builtin(builtins::println);
+            }
+            _ => unimplemented!(),
+        };
     }
 
     fn compile_decl(&mut self, decl: &ast::Decl) {
@@ -407,6 +428,37 @@ impl<'ctx, 'lir> Jit<'_, '_> {
         // ((Self::NUM_SCRATCH_SLOTS as i32 + slot) + 1) * -8
     }
 
+    fn mov_vreg_imm(&mut self, vreg: VReg, imm: Value) {
+        use regalloc::Slot;
+        match self.alloc_map[vreg.0 as usize] {
+            Slot::Reg(reg) => unimplemented!(),
+            Slot::Stack(slot) => {
+                self.e.mov_reg_imm(Reg::R11, imm.raw());
+                self.e.mov_rm_reg(
+                    S::Q,
+                    Scale::NoScale,
+                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
+                    Reg::R11,
+                );
+            }
+        };
+    }
+
+    fn mov_reg_vreg(&mut self, dst: Reg, src: VReg) {
+        use regalloc::Slot;
+        match self.alloc_map[src.0 as usize] {
+            Slot::Reg(reg) => unimplemented!(),
+            Slot::Stack(slot) => {
+                self.e.mov_reg_rm(
+                    S::Q,
+                    Scale::NoScale,
+                    dst,
+                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
+                );
+            }
+        };
+    }
+
     fn emit_prologue(&mut self) {
         self.e.pushq(Reg::RBP);
         self.e.mov_reg_reg(S::Q, Reg::RBP, Reg::RSP);
@@ -425,7 +477,10 @@ impl<'ctx, 'lir> Jit<'_, '_> {
         self.e.sub_reg_imm(
             S::Q,
             Reg::RSP,
-            align((Self::NUM_SCRATCH_SLOTS + self.num_vars()) * 8, 16),
+            align(
+                (Self::NUM_SCRATCH_SLOTS + self.lir.get_stack_size()) * 8,
+                16,
+            ),
         );
     }
 

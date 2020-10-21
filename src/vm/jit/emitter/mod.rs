@@ -237,7 +237,7 @@ impl<'buf> Emitter<'buf> {
             s,
             scale,
             if s == S::B { opcode } else { opcode + 1 },
-            dst.ord7(),
+            dst.ord(),
             src,
         );
     }
@@ -678,6 +678,13 @@ mod tests {
             e,
             [0x48, 0xb9, 0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x00, 0x00,]
         );
+        e.mov_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (Reg::RBP, Reg::NoIndex, 8),
+            Reg::R11,
+        );
+        check!(e, [0x4c, 0x89, 0x5d, 0x08]);
     }
 
     #[test]
