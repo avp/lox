@@ -684,7 +684,7 @@ mod tests {
             (Reg::RBP, Reg::NoIndex, 8),
             Reg::R11,
         );
-        check!(e, [0x4c, 0x89, 0x5d, 0x08]);
+        check_str!(e, "mov qword ptr [rbp + 8], r11");
     }
 
     #[test]

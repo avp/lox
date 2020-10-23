@@ -81,6 +81,11 @@ impl Function {
     }
 
     #[inline]
+    pub fn num_blocks(&self) -> usize {
+        self.blocks.len()
+    }
+
+    #[inline]
     pub fn get_entry_block(&self) -> &BasicBlock {
         &self.blocks[0]
     }
