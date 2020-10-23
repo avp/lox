@@ -20,20 +20,57 @@ pub fn reg_alloc(func: &lir::Function) -> Vec<Slot> {
 struct RegAllocator<'lir> {
     func: &'lir lir::Function,
     allocations: Vec<Slot>,
-    active_intervals: Vec<Option<Interval>>,
+    inst_intervals: Vec<Interval>,
+    block_offsets: Vec<usize>,
     block_liveness: Vec<BlockLiveness>,
 }
 
 impl RegAllocator<'_> {
     pub fn new(func: &lir::Function) -> RegAllocator {
         let stack_size = func.get_stack_size() as usize;
-        let num_blocks = func.num_blocks();
+        let num_blocks = func.blocks().len();
+
+        let mut offset = 0;
+        let mut block_offsets = Vec::with_capacity(num_blocks);
+        for block in func.blocks() {
+            block_offsets.push(offset);
+            offset += block.insts().len();
+        }
+
         RegAllocator {
             func,
             allocations: vec![Slot::Reg(Reg::NONE); stack_size],
-            active_intervals: vec![None; stack_size],
+            inst_intervals: vec![Interval::new(0, 0); offset],
+            block_offsets,
             block_liveness: vec![BlockLiveness::new(stack_size); num_blocks],
         }
+    }
+
+    pub fn allocate(&mut self) {
+        self.calc_local_liveness();
+        self.calc_global_liveness();
+    }
+
+    fn calc_local_liveness(&mut self) {
+        for (idx, bb) in self.func.blocks().iter().enumerate() {
+            let live = &mut self.block_liveness[idx];
+            for inst in bb.insts() {
+                if let Some(out) = inst.def() {
+                    live.kill.set(out.0 as usize, true);
+                }
+                inst.for_each_use(|vreg| {
+                    live.gen.set(vreg.0 as usize, true);
+                });
+            }
+        }
+    }
+
+    fn calc_global_liveness(&mut self) {
+        unimplemented!();
+    }
+
+    fn get_inst_number(&self, bb: lir::BasicBlockIdx, inst_idx: usize) {
+        self.block_offsets[bb.0] + inst_idx;
     }
 }
 

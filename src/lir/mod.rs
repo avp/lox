@@ -50,7 +50,7 @@ impl<'ctx> Program<'ctx> {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct FunctionIdx(usize);
+pub struct FunctionIdx(pub usize);
 
 #[derive(Debug)]
 pub struct Function {
@@ -81,8 +81,13 @@ impl Function {
     }
 
     #[inline]
-    pub fn num_blocks(&self) -> usize {
-        self.blocks.len()
+    pub fn blocks(&self) -> &[BasicBlock] {
+        &self.blocks
+    }
+
+    #[inline]
+    pub fn blocks_mut(&mut self) -> &mut [BasicBlock] {
+        &mut self.blocks
     }
 
     #[inline]
@@ -102,7 +107,7 @@ impl Function {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct BasicBlockIdx(usize);
+pub struct BasicBlockIdx(pub usize);
 
 #[derive(Debug)]
 pub struct BasicBlock {
