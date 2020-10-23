@@ -9,9 +9,6 @@ pub enum Slot {
     Stack(u32),
 }
 
-const USABLE_REGS: &'static [Reg] =
-    &[Reg::RCX, Reg::RDX, Reg::R12, Reg::R13, Reg::R14, Reg::R15];
-
 pub fn reg_alloc(func: &lir::Function) -> Vec<Slot> {
     let mut res = vec![Slot::Reg(Reg::NONE); func.get_stack_size() as usize];
     for i in 0..func.get_stack_size() {
@@ -70,10 +67,56 @@ struct BlockLiveness {
 impl BlockLiveness {
     pub fn new(size: usize) -> BlockLiveness {
         BlockLiveness {
-            gen: bitvec![0; size],
-            kill: bitvec![0; size],
-            live_in: bitvec![0; size],
-            live_out: bitvec![0; size],
+            gen: BitVec::repeat(false, size),
+            kill: BitVec::repeat(false, size),
+            live_in: BitVec::repeat(false, size),
+            live_out: BitVec::repeat(false, size),
         }
+    }
+}
+
+const USABLE_REGS: &'static [Reg] =
+    &[Reg::RCX, Reg::RDX, Reg::R12, Reg::R13, Reg::R14, Reg::R15];
+
+fn reg_position(reg: Reg) -> usize {
+    match reg {
+        Reg::RCX => 0,
+        Reg::RDX => 1,
+        Reg::R12 => 2,
+        Reg::R13 => 3,
+        Reg::R14 => 4,
+        Reg::R15 => 5,
+        _ => unreachable!("Invalid usable register"),
+    }
+}
+
+#[derive(Debug)]
+struct RegFile {
+    regs: BitVec,
+}
+
+impl RegFile {
+    pub fn new(size: usize) -> RegFile {
+        RegFile {
+            regs: BitVec::repeat(true, USABLE_REGS.len() + size),
+        }
+    }
+
+    pub fn alloc(&mut self) -> Slot {
+        let pos = self.regs.iter().position(|b| *b).unwrap();
+        self.regs.set(pos, false);
+        if pos < USABLE_REGS.len() {
+            Slot::Reg(USABLE_REGS[pos])
+        } else {
+            Slot::Stack((pos - USABLE_REGS.len()) as u32)
+        }
+    }
+
+    pub fn free(&mut self, slot: Slot) {
+        let pos = match slot {
+            Slot::Reg(reg) => reg_position(reg),
+            Slot::Stack(n) => n as usize + USABLE_REGS.len(),
+        };
+        self.regs.set(pos, true);
     }
 }
