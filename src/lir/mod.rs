@@ -122,4 +122,25 @@ impl BasicBlock {
     pub fn insts(&self) -> &[Inst] {
         &self.insts
     }
+
+    pub fn for_each_succ<F>(&self, mut cb: F)
+    where
+        F: FnMut(BasicBlockIdx),
+    {
+        use Opcode::*;
+        let inst = self.insts().last();
+        if inst.is_none() {
+            return;
+        }
+        match inst.unwrap().opcode {
+            Branch(bb) => {
+                cb(bb);
+            }
+            CondBranch(_, bb1, bb2) => {
+                cb(bb1);
+                cb(bb2);
+            }
+            _ => {}
+        }
+    }
 }

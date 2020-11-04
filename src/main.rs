@@ -4,6 +4,8 @@ extern crate failure;
 #[macro_use]
 extern crate memoffset;
 
+mod support;
+
 mod lexer;
 mod token;
 

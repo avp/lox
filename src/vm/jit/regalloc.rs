@@ -1,5 +1,6 @@
 use super::emitter::Reg;
 use crate::lir;
+use crate::support::slice_get_2_mut;
 use bitvec::prelude::*;
 use bitvec::vec::BitVec;
 
@@ -66,7 +67,42 @@ impl RegAllocator<'_> {
     }
 
     fn calc_global_liveness(&mut self) {
-        unimplemented!();
+        let mut changed = false;
+
+        for live in &mut self.block_liveness {
+            live.live_in |= live.gen.iter().copied();
+            live.live_in &= live.kill.iter().copied().map(|b| !b);
+        }
+
+        loop {
+            for (bb_idx, bb) in self.func.blocks().iter().enumerate() {
+                bb.for_each_succ(|succ_idx| {
+                    let (live, succ_live) = unsafe {
+                        slice_get_2_mut(
+                            &mut self.block_liveness,
+                            bb_idx,
+                            succ_idx.0,
+                        )
+                    };
+                    succ_live
+                        .live_out
+                        .iter_mut()
+                        .zip(live.live_out.iter())
+                        .for_each(|(mut b1, &b2)| {
+                            changed |= !*b1 && b2;
+                            *b1 |= b2;
+                        });
+                });
+
+                // In = gen + (OUT - KILL)
+                let live = &mut self.block_liveness[bb_idx];
+                live.live_in.clone_from(&live.live_out);
+            }
+
+            if !changed {
+                break;
+            }
+        }
     }
 
     fn get_inst_number(&self, bb: lir::BasicBlockIdx, inst_idx: usize) {
