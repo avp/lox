@@ -18,6 +18,9 @@ impl Inst {
 
 #[derive(Debug)]
 pub enum Opcode {
+    /// dest <- op
+    Mov(VReg, VReg),
+
     /// dest <- op1 + op2
     Add(VReg, VReg, VReg),
     /// dest <- op1 - op2
@@ -74,6 +77,7 @@ impl Inst {
     pub fn def(&self) -> Option<VReg> {
         use Opcode::*;
         match self.opcode {
+            Mov(reg, _) => Some(reg),
             Add(reg, _, _) => Some(reg),
             Sub(reg, _, _) => Some(reg),
             Mul(reg, _, _) => Some(reg),
@@ -106,6 +110,10 @@ impl Inst {
     {
         use Opcode::*;
         match self.opcode {
+            Mov(op1, op2) => {
+                cb(op1);
+                cb(op2);
+            }
             Add(_, op1, op2) => {
                 cb(op1);
                 cb(op2);

@@ -152,8 +152,14 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     fn compile_inst(&mut self, inst: &lir::Inst) {
         use lir::Opcode::*;
         match inst.opcode {
+            Mov(dst, src) => {
+                self.mov_vreg_vreg(dst, src);
+            }
             Ret(reg) => {
                 self.mov_reg_vreg(Reg::RAX, reg);
+            }
+            LoadBool(vreg, val) => {
+                self.mov_vreg_imm(vreg, Value::bool(val));
             }
             LoadNil(reg) => {
                 self.mov_vreg_imm(reg, Value::nil());
@@ -166,7 +172,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.mov_reg_vreg(Reg::RSI, reg);
                 self.call_builtin(builtins::println);
             }
-            _ => unimplemented!(),
+            _ => unimplemented!("{:?}", &inst),
         };
     }
 
@@ -428,6 +434,11 @@ impl<'ctx, 'lir> Jit<'_, '_> {
         // ((Self::NUM_SCRATCH_SLOTS as i32 + slot) + 1) * -8
     }
 
+    fn mov_vreg_vreg(&mut self, dst: VReg, src: VReg) {
+        self.mov_reg_vreg(Reg::R11, src);
+        self.mov_vreg_reg(dst, Reg::R11);
+    }
+
     fn mov_vreg_imm(&mut self, vreg: VReg, imm: Value) {
         use regalloc::Slot;
         match self.alloc_map[vreg.0 as usize] {
@@ -447,13 +458,28 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     fn mov_reg_vreg(&mut self, dst: Reg, src: VReg) {
         use regalloc::Slot;
         match self.alloc_map[src.0 as usize] {
-            Slot::Reg(reg) => unimplemented!(),
+            Slot::Reg(_reg) => unimplemented!(),
             Slot::Stack(slot) => {
                 self.e.mov_reg_rm(
                     S::Q,
                     Scale::NoScale,
                     dst,
                     (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
+                );
+            }
+        };
+    }
+
+    fn mov_vreg_reg(&mut self, dst: VReg, src: Reg) {
+        use regalloc::Slot;
+        match self.alloc_map[dst.0 as usize] {
+            Slot::Reg(_reg) => unimplemented!(),
+            Slot::Stack(slot) => {
+                self.e.mov_rm_reg(
+                    S::Q,
+                    Scale::NoScale,
+                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
+                    src,
                 );
             }
         };

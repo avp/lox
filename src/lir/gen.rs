@@ -79,6 +79,9 @@ impl<'ctx> Generator<'ctx> {
                 let vreg = self.gen_expr(expr);
                 self.builder.make_inst(Print(vreg));
             }
+            ast::StmtKind::Expr(expr) => {
+                self.gen_expr(expr);
+            }
             _ => unimplemented!(),
         };
     }
@@ -90,7 +93,63 @@ impl<'ctx> Generator<'ctx> {
                 self.builder.make_inst(LoadNumber(vreg, *n));
                 vreg
             }
-            _ => unimplemented!(),
+            ast::ExprKind::Assign(left, right) => {
+                let lhs = self.gen_expr(left);
+                let rhs = self.gen_expr(right);
+                self.builder.make_inst(Mov(lhs, rhs));
+                lhs
+            }
+            ast::ExprKind::BinOp(kind, left, right) => {
+                let vreg = self.alloc_vreg();
+                let lhs = self.gen_expr(left);
+                let rhs = self.gen_expr(right);
+                match kind {
+                    ast::BinOpKind::Add => {
+                        self.builder.make_inst(Add(vreg, lhs, rhs))
+                    }
+                    ast::BinOpKind::Sub => {
+                        self.builder.make_inst(Sub(vreg, lhs, rhs))
+                    }
+                    ast::BinOpKind::Mul => {
+                        self.builder.make_inst(Mul(vreg, lhs, rhs))
+                    }
+                    ast::BinOpKind::Div => {
+                        self.builder.make_inst(Div(vreg, lhs, rhs))
+                    }
+                    ast::BinOpKind::Equal => {
+                        self.builder.make_inst(Equal(vreg, lhs, rhs))
+                    }
+                    ast::BinOpKind::NotEqual => {
+                        self.builder.make_inst(Equal(vreg, lhs, rhs));
+                        self.builder.make_inst(Not(vreg, vreg));
+                    }
+                    ast::BinOpKind::Greater => {
+                        self.builder.make_inst(LessEqual(vreg, lhs, rhs));
+                        self.builder.make_inst(Not(vreg, vreg));
+                    }
+                    ast::BinOpKind::GreaterEqual => {
+                        self.builder.make_inst(Less(vreg, lhs, rhs));
+                        self.builder.make_inst(Not(vreg, vreg));
+                    }
+                    ast::BinOpKind::Less => {
+                        self.builder.make_inst(Less(vreg, lhs, rhs))
+                    }
+                    ast::BinOpKind::LessEqual => {
+                        self.builder.make_inst(LessEqual(vreg, lhs, rhs))
+                    }
+                }
+                vreg
+            }
+            ast::ExprKind::UnOp(_kind, _expr) => unimplemented!(),
+            ast::ExprKind::StringLiteral(_val) => unimplemented!(),
+            ast::ExprKind::BoolLiteral(val) => {
+                let vreg = self.alloc_vreg();
+                self.builder.make_inst(LoadBool(vreg, *val));
+                vreg
+            }
+            ast::ExprKind::Ident(name) => {
+                *self.name_table.get(name).expect("unresolved variable")
+            }
         }
     }
 }
