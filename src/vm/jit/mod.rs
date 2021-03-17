@@ -177,6 +177,14 @@ impl<'ctx, 'lir> Jit<'_, '_> {
             LoadNumber(reg, n) => {
                 self.mov_vreg_imm(reg, Value::number(n));
             }
+            Add(dst, r1, r2) => {
+                self.mov_vreg_vreg(dst, r1);
+                self.binop_vreg_vreg(ast::BinOpKind::Add, dst, r2);
+            }
+            Sub(dst, r1, r2) => {
+                self.mov_vreg_vreg(dst, r1);
+                self.binop_vreg_vreg(ast::BinOpKind::Sub, dst, r2);
+            }
             Print(reg) => {
                 self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
                 self.mov_reg_vreg(Reg::RSI, reg);
@@ -478,8 +486,74 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     }
 
     fn mov_vreg_vreg(&mut self, dst: VReg, src: VReg) {
+        if dst == src {
+            return;
+        }
         self.mov_reg_vreg(Reg::R11, src);
         self.mov_vreg_reg(dst, Reg::R11);
+    }
+
+    fn binop_vreg_vreg(&mut self, kind: ast::BinOpKind, dst: VReg, src: VReg) {
+        use regalloc::Slot;
+        match self.alloc_map[dst.0 as usize] {
+            Slot::Reg(reg) => {
+                self.need_number(reg);
+                self.fp_from_reg(FP::Double, Reg::XMM0, reg);
+            }
+            Slot::Stack(slot) => {
+                self.mov_reg_vreg(Reg::R11, dst);
+                self.need_number(Reg::R11);
+                self.e.mov_fp_rm(
+                    FP::Double,
+                    Scale::NoScale,
+                    Reg::XMM0,
+                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
+                );
+            }
+        }
+        match self.alloc_map[src.0 as usize] {
+            Slot::Reg(reg) => {
+                self.need_number(reg);
+                self.e.mov_rm_reg(
+                    S::Q,
+                    Scale::NoScale,
+                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(0)),
+                    reg,
+                );
+            }
+            Slot::Stack(slot) => {
+                self.mov_reg_vreg(Reg::R11, src);
+                self.need_number(Reg::R11);
+                match kind {
+                    ast::BinOpKind::Add => self.e.add_fp_rm(
+                        FP::Double,
+                        Scale::NoScale,
+                        Reg::XMM0,
+                        (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
+                    ),
+                    ast::BinOpKind::Sub => self.e.sub_fp_rm(
+                        FP::Double,
+                        Scale::NoScale,
+                        Reg::XMM0,
+                        (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
+                    ),
+                    _ => unimplemented!("{:?}", kind),
+                };
+            }
+        }
+        match self.alloc_map[dst.0 as usize] {
+            Slot::Reg(reg) => {
+                self.reg_from_fp(FP::Double, reg, Reg::XMM0);
+            }
+            Slot::Stack(slot) => {
+                self.e.mov_rm_fp(
+                    FP::Double,
+                    Scale::NoScale,
+                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
+                    Reg::XMM0,
+                );
+            }
+        }
     }
 
     fn mov_vreg_imm(&mut self, vreg: VReg, imm: Value) {

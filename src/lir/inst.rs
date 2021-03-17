@@ -1,7 +1,7 @@
 use super::BasicBlockIdx;
 
 /// A "virtual" register, in contrast to actual CPU registers.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
 pub struct VReg(pub u32);
 
