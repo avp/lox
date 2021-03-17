@@ -45,9 +45,12 @@ impl JitContext {
     }
 }
 
-type Label = u32;
-const EPILOGUE_LABEL: Label = Label::max_value();
-const ERROR_LABEL: Label = EPILOGUE_LABEL - 1;
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+enum Label {
+    BasicBlock(lir::BasicBlockIdx),
+    Epilogue,
+    Error,
+}
 
 const REG_STATE: Reg = Reg::RBX;
 
@@ -140,10 +143,17 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     }
 
     fn compile_function(&mut self, function: &lir::Function) {
-        self.compile_block(function.get_entry_block());
+        for (idx, block) in function.blocks().iter().enumerate() {
+            self.compile_block(block, lir::BasicBlockIdx(idx));
+        }
     }
 
-    fn compile_block(&mut self, block: &lir::BasicBlock) {
+    fn compile_block(
+        &mut self,
+        block: &lir::BasicBlock,
+        idx: lir::BasicBlockIdx,
+    ) {
+        self.labels.insert(Label::BasicBlock(idx), self.e.index);
         for inst in block.insts() {
             self.compile_inst(inst);
         }
@@ -172,9 +182,38 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.mov_reg_vreg(Reg::RSI, reg);
                 self.call_builtin(builtins::println);
             }
-            Branch(bb) => unimplemented!("{:?}", &inst),
+            Branch(bb) => {
+                self.e.jmp(emitter::OffsetType::Int32, 0.into());
+                self.relocs.push(Reloc::new(
+                    self.e.get_index() - 4,
+                    Label::BasicBlock(bb),
+                    RelocKind::Int32,
+                ));
+            }
             CondBranch(cond, bb_true, bb_false) => {
-                unimplemented!("{:?}", &inst)
+                self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
+                self.mov_reg_vreg(Reg::RSI, cond);
+                self.call_builtin(builtins::to_bool);
+
+                // Check bottom bits of rax to see if the bool is true or false.
+                self.e.test_reg_reg(S::B, Reg::AL, Reg::AL);
+                self.e.cjump(
+                    emitter::CCode::E,
+                    emitter::OffsetType::Int32,
+                    0.into(),
+                );
+                self.relocs.push(Reloc::new(
+                    self.e.get_index() - 4,
+                    Label::BasicBlock(bb_false),
+                    RelocKind::Int32,
+                ));
+
+                self.e.jmp(emitter::OffsetType::Int32, 0.into());
+                self.relocs.push(Reloc::new(
+                    self.e.get_index() - 4,
+                    Label::BasicBlock(bb_true),
+                    RelocKind::Int32,
+                ));
             }
             _ => unimplemented!("{:?}", &inst),
         };
@@ -481,7 +520,9 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     fn mov_vreg_reg(&mut self, dst: VReg, src: Reg) {
         use regalloc::Slot;
         match self.alloc_map[dst.0 as usize] {
-            Slot::Reg(_reg) => unimplemented!(),
+            Slot::Reg(dst) => {
+                self.e.mov_reg_reg(S::Q, dst, src);
+            }
             Slot::Stack(slot) => {
                 self.e.mov_rm_reg(
                     S::Q,
@@ -522,10 +563,10 @@ impl<'ctx, 'lir> Jit<'_, '_> {
         self.e.jmp(emitter::OffsetType::Int8, 0x00);
         self.relocs.push(Reloc::new(
             self.e.get_index() - 1,
-            EPILOGUE_LABEL,
+            Label::Epilogue,
             RelocKind::Int8,
         ));
-        self.labels.insert(ERROR_LABEL, self.e.get_index());
+        self.labels.insert(Label::Error, self.e.get_index());
         self.e.mov_reg_imm(Reg::RDI, Value::bool(true).raw());
         self.e.mov_rm_reg(
             S::Q,
@@ -537,7 +578,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
             ),
             Reg::RDI,
         );
-        self.labels.insert(EPILOGUE_LABEL, self.e.get_index());
+        self.labels.insert(Label::Epilogue, self.e.get_index());
         self.e.popq(Reg::RCX);
         self.e.popq(REG_STATE);
         self.e.leave();
@@ -561,7 +602,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
             .cjump(emitter::CCode::NB, emitter::OffsetType::Int32, 0);
         self.relocs.push(Reloc::new(
             self.e.get_index() - 4,
-            ERROR_LABEL,
+            Label::Error,
             RelocKind::Int32,
         ));
     }
@@ -596,12 +637,6 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     fn call_builtin(&mut self, func: builtins::BuiltinFunc) {
         self.e.mov_reg_imm(Reg::RAX, builtins::addr(func));
         self.e.call_reg(Reg::RAX);
-    }
-
-    fn new_label(&mut self) -> Label {
-        let label: Label = self.labels.len() as Label;
-        self.labels.insert(label, self.e.get_index());
-        label
     }
 
     fn resolve_relocs(&mut self) {

@@ -220,8 +220,8 @@ impl BlockLiveness {
     }
 }
 
-const USABLE_REGS: &'static [Reg] =
-    &[Reg::RCX, Reg::RDX, Reg::R12, Reg::R13, Reg::R14, Reg::R15];
+const USABLE_REGS: &'static [Reg] = &[];
+// &[Reg::RCX, Reg::RDX, Reg::R12, Reg::R13, Reg::R14, Reg::R15];
 
 fn reg_position(reg: Reg) -> usize {
     match reg {
