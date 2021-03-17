@@ -172,6 +172,10 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.mov_reg_vreg(Reg::RSI, reg);
                 self.call_builtin(builtins::println);
             }
+            Branch(bb) => unimplemented!("{:?}", &inst),
+            CondBranch(cond, bb_true, bb_false) => {
+                unimplemented!("{:?}", &inst)
+            }
             _ => unimplemented!("{:?}", &inst),
         };
     }

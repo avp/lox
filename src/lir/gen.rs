@@ -75,14 +75,38 @@ impl<'ctx> Generator<'ctx> {
 
     fn gen_stmt(&mut self, node: &ast::Stmt) {
         match &node.kind {
+            ast::StmtKind::Expr(expr) => {
+                self.gen_expr(expr);
+            }
+            ast::StmtKind::While(cond, body) => {
+                let bb_cond = self.builder.make_block();
+                let bb_body = self.builder.make_block();
+                let bb_next = self.builder.make_block();
+
+                self.builder.make_inst(Branch(bb_cond));
+
+                // Condition block.
+                self.builder.set_block(bb_cond);
+                let cond_vreg = self.gen_expr(cond);
+                self.builder
+                    .make_inst(CondBranch(cond_vreg, bb_body, bb_next));
+
+                // Body of the loop.
+                self.builder.set_block(bb_body);
+                self.gen_block(body);
+                self.builder.make_inst(Branch(bb_cond));
+
+                // Continue.
+                self.builder.set_block(bb_next);
+            }
+            ast::StmtKind::Return(expr) => {
+                let vreg = self.gen_expr(expr);
+                self.builder.make_inst(Ret(vreg));
+            }
             ast::StmtKind::Print(expr) => {
                 let vreg = self.gen_expr(expr);
                 self.builder.make_inst(Print(vreg));
             }
-            ast::StmtKind::Expr(expr) => {
-                self.gen_expr(expr);
-            }
-            _ => unimplemented!(),
         };
     }
 
