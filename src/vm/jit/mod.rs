@@ -442,7 +442,9 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     fn mov_vreg_imm(&mut self, vreg: VReg, imm: Value) {
         use regalloc::Slot;
         match self.alloc_map[vreg.0 as usize] {
-            Slot::Reg(reg) => unimplemented!(),
+            Slot::Reg(dst) => {
+                self.e.mov_reg_imm(dst, imm.raw());
+            }
             Slot::Stack(slot) => {
                 self.e.mov_reg_imm(Reg::R11, imm.raw());
                 self.e.mov_rm_reg(
@@ -458,7 +460,9 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     fn mov_reg_vreg(&mut self, dst: Reg, src: VReg) {
         use regalloc::Slot;
         match self.alloc_map[src.0 as usize] {
-            Slot::Reg(_reg) => unimplemented!(),
+            Slot::Reg(reg) => {
+                self.e.mov_reg_reg(S::Q, dst, reg);
+            }
             Slot::Stack(slot) => {
                 self.e.mov_reg_rm(
                     S::Q,

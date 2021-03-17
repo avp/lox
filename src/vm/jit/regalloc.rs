@@ -11,11 +11,14 @@ pub enum Slot {
 }
 
 pub fn reg_alloc(func: &lir::Function) -> Vec<Slot> {
-    let mut res = vec![Slot::Reg(Reg::NONE); func.get_stack_size() as usize];
-    for i in 0..func.get_stack_size() {
-        res[i as usize] = Slot::Stack(0);
-    }
-    res
+    let mut allocator = RegAllocator::new(func);
+    allocator.allocate_fast();
+    allocator.allocations
+    // let mut res = vec![Slot::Reg(Reg::NONE); func.get_stack_size() as usize];
+    // for i in 0..func.get_stack_size() {
+    //     res[i as usize] = Slot::Stack(0);
+    // }
+    // res
 }
 
 struct RegAllocator<'lir> {
@@ -41,9 +44,16 @@ impl RegAllocator<'_> {
         RegAllocator {
             func,
             allocations: vec![Slot::Reg(Reg::NONE); stack_size],
-            inst_intervals: vec![Interval::new(0, 0); offset],
+            inst_intervals: vec![Interval::empty(); offset],
             block_offsets,
             block_liveness: vec![BlockLiveness::new(stack_size); num_blocks],
+        }
+    }
+
+    pub fn allocate_fast(&mut self) {
+        let mut file = RegFile::new(self.allocations.len());
+        for reg in self.allocations.iter_mut() {
+            *reg = file.alloc();
         }
     }
 
@@ -105,20 +115,82 @@ impl RegAllocator<'_> {
         }
     }
 
+    fn calc_liveness_intervals(&mut self) {
+        let mut changed = false;
+        // Start with intervals that contain only the segment.
+    }
+
     fn get_inst_number(&self, bb: lir::BasicBlockIdx, inst_idx: usize) {
         self.block_offsets[bb.0] + inst_idx;
     }
 }
 
 #[derive(Debug, Copy, Clone)]
-struct Interval {
+struct Segment {
     start: usize,
     end: usize,
 }
 
+impl Segment {
+    pub fn new(start: usize, end: usize) -> Segment {
+        Segment { start, end }
+    }
+
+    pub fn intersects(&self, other: Segment) -> bool {
+        !(other.start >= self.end || self.start >= other.end)
+    }
+
+    pub fn adjacent(&self, other: Segment) -> bool {
+        other.start == self.end || self.start == other.end
+    }
+
+    /// Merge the two segments into `self`, making self contain at least both.
+    pub fn merge(&mut self, other: Segment) {
+        use std::cmp::{max, min};
+        self.start = min(self.start, other.start);
+        self.end = max(self.end, other.end);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Interval {
+    segments: Vec<Segment>,
+}
+
 impl Interval {
+    pub fn empty() -> Interval {
+        Interval { segments: vec![] }
+    }
+
     pub fn new(start: usize, end: usize) -> Interval {
-        Interval { start, end }
+        Interval {
+            segments: vec![Segment::new(start, end)],
+        }
+    }
+
+    pub fn intersects_segment(&self, other: Segment) -> bool {
+        for segment in self.segments.iter() {
+            if segment.intersects(other) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn add_segment(&mut self, other: Segment) {
+        for segment in self.segments.iter_mut() {
+            if segment.intersects(other) || segment.adjacent(other) {
+                segment.merge(other);
+                return;
+            }
+        }
+        self.segments.push(other);
+    }
+
+    pub fn add_interval(&mut self, other: &Interval) {
+        for &segment in &other.segments {
+            self.add_segment(segment);
+        }
     }
 }
 
@@ -159,7 +231,7 @@ fn reg_position(reg: Reg) -> usize {
         Reg::R13 => 3,
         Reg::R14 => 4,
         Reg::R15 => 5,
-        _ => unreachable!("Invalid usable register"),
+        _ => unreachable!("Invalid usable register: {:?}", reg),
     }
 }
 
