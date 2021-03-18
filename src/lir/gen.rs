@@ -165,7 +165,11 @@ impl<'ctx> Generator<'ctx> {
                 vreg
             }
             ast::ExprKind::UnOp(_kind, _expr) => unimplemented!(),
-            ast::ExprKind::StringLiteral(_val) => unimplemented!(),
+            ast::ExprKind::StringLiteral(val) => {
+                let vreg = self.alloc_vreg();
+                self.builder.make_inst(LoadString(vreg, val.clone()));
+                vreg
+            }
             ast::ExprKind::BoolLiteral(val) => {
                 let vreg = self.alloc_vreg();
                 self.builder.make_inst(LoadBool(vreg, *val));

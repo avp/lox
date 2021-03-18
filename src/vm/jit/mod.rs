@@ -13,7 +13,7 @@ use super::heap::*;
 use super::value;
 use super::VMState;
 use super::Value;
-use emitter::{Reg, Scale, FP, S};
+use emitter::{Reg, Scale, FP, RM, S};
 use mem::ExecHeap;
 
 use std::collections::HashMap;
@@ -161,36 +161,54 @@ impl<'ctx, 'lir> Jit<'_, '_> {
 
     fn compile_inst(&mut self, inst: &lir::Inst) {
         use lir::Opcode::*;
-        match inst.opcode {
+        match &inst.opcode {
             Mov(dst, src) => {
-                self.mov_vreg_vreg(dst, src);
+                self.mov_vreg_vreg(*dst, *src);
             }
             Ret(reg) => {
-                self.mov_reg_vreg(Reg::RAX, reg);
+                self.mov_reg_vreg(Reg::RAX, *reg);
             }
             LoadBool(vreg, val) => {
-                self.mov_vreg_imm(vreg, Value::bool(val));
+                self.mov_vreg_imm(*vreg, Value::bool(*val));
             }
             LoadNil(reg) => {
-                self.mov_vreg_imm(reg, Value::nil());
+                self.mov_vreg_imm(*reg, Value::nil());
             }
             LoadNumber(reg, n) => {
-                self.mov_vreg_imm(reg, Value::number(n));
+                self.mov_vreg_imm(*reg, Value::number(*n));
             }
-            Add(dst, r1, r2) => {
+            LoadString(reg, unique_string) => {
+                let s: &str = &*unique_string.clone();
+                let ptr = LoxString::new(&mut self.vm.state.heap, s);
+                let idx: u32 = self.vm.state.string_table.add(ptr);
+                self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
+                self.e
+                    .mov_reg_imm(Reg::RSI, Value::number(idx as f64).raw());
+                self.call_builtin(builtins::load_loxstring);
+                self.mov_vreg_reg(*reg, Reg::RAX);
+            }
+            &Add(dst, r1, r2) => {
                 self.mov_vreg_vreg(dst, r1);
                 self.binop_vreg_vreg(ast::BinOpKind::Add, dst, r2);
             }
-            Sub(dst, r1, r2) => {
+            &Sub(dst, r1, r2) => {
                 self.mov_vreg_vreg(dst, r1);
                 self.binop_vreg_vreg(ast::BinOpKind::Sub, dst, r2);
             }
-            Print(reg) => {
+            &Mul(dst, r1, r2) => {
+                self.mov_vreg_vreg(dst, r1);
+                self.binop_vreg_vreg(ast::BinOpKind::Mul, dst, r2);
+            }
+            &Div(dst, r1, r2) => {
+                self.mov_vreg_vreg(dst, r1);
+                self.binop_vreg_vreg(ast::BinOpKind::Div, dst, r2);
+            }
+            &Print(reg) => {
                 self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
                 self.mov_reg_vreg(Reg::RSI, reg);
                 self.call_builtin(builtins::println);
             }
-            Branch(bb) => {
+            &Branch(bb) => {
                 self.e.jmp(emitter::OffsetType::Int32, 0.into());
                 self.relocs.push(Reloc::new(
                     self.e.get_index() - 4,
@@ -198,7 +216,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                     RelocKind::Int32,
                 ));
             }
-            CondBranch(cond, bb_true, bb_false) => {
+            &CondBranch(cond, bb_true, bb_false) => {
                 self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
                 self.mov_reg_vreg(Reg::RSI, cond);
                 self.call_builtin(builtins::to_bool);
@@ -467,22 +485,17 @@ impl<'ctx, 'lir> Jit<'_, '_> {
         // }
     }
 
-    fn num_vars(&self) -> u32 {
-        unimplemented!();
-    }
-
     fn scratch_disp(&self, slot: u32) -> i32 {
         // Go one below because the stack grows up.
         (slot as i32 + 1) * -8
     }
 
-    /// Return the offset from rbp at which the variable called `name`
-    /// can be found. This is a negative integer, and multiple of 8.
-    fn var_disp(&self, name: &UniqueString) -> i32 {
-        unimplemented!();
-        // let slot = self.sem.find_var(name).unwrap() as i32;
-        // // Go one below because the stack grows up.
-        // ((Self::NUM_SCRATCH_SLOTS as i32 + slot) + 1) * -8
+    fn slot(&self, slot: u32) -> RM {
+        (
+            Reg::RBP,
+            Reg::NoIndex,
+            self.scratch_disp(slot + Self::NUM_SCRATCH_SLOTS),
+        )
     }
 
     fn mov_vreg_vreg(&mut self, dst: VReg, src: VReg) {
@@ -507,11 +520,11 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                     FP::Double,
                     Scale::NoScale,
                     Reg::XMM0,
-                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
+                    self.slot(slot),
                 );
             }
         }
-        match self.alloc_map[src.0 as usize] {
+        let rm = match self.alloc_map[src.0 as usize] {
             Slot::Reg(reg) => {
                 self.need_number(reg);
                 self.e.mov_rm_reg(
@@ -520,27 +533,29 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                     (Reg::RBP, Reg::NoIndex, self.scratch_disp(0)),
                     reg,
                 );
+                (Reg::RBP, Reg::NoIndex, self.scratch_disp(0))
             }
             Slot::Stack(slot) => {
                 self.mov_reg_vreg(Reg::R11, src);
                 self.need_number(Reg::R11);
-                match kind {
-                    ast::BinOpKind::Add => self.e.add_fp_rm(
-                        FP::Double,
-                        Scale::NoScale,
-                        Reg::XMM0,
-                        (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
-                    ),
-                    ast::BinOpKind::Sub => self.e.sub_fp_rm(
-                        FP::Double,
-                        Scale::NoScale,
-                        Reg::XMM0,
-                        (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
-                    ),
-                    _ => unimplemented!("{:?}", kind),
-                };
+                self.slot(slot)
             }
-        }
+        };
+        match kind {
+            ast::BinOpKind::Add => {
+                self.e.add_fp_rm(FP::Double, Scale::NoScale, Reg::XMM0, rm)
+            }
+            ast::BinOpKind::Sub => {
+                self.e.sub_fp_rm(FP::Double, Scale::NoScale, Reg::XMM0, rm)
+            }
+            ast::BinOpKind::Mul => {
+                self.e.mul_fp_rm(FP::Double, Scale::NoScale, Reg::XMM0, rm)
+            }
+            ast::BinOpKind::Div => {
+                self.e.div_fp_rm(FP::Double, Scale::NoScale, Reg::XMM0, rm)
+            }
+            _ => unimplemented!("{:?}", kind),
+        };
         match self.alloc_map[dst.0 as usize] {
             Slot::Reg(reg) => {
                 self.reg_from_fp(FP::Double, reg, Reg::XMM0);
@@ -549,7 +564,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.e.mov_rm_fp(
                     FP::Double,
                     Scale::NoScale,
-                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
+                    self.slot(slot),
                     Reg::XMM0,
                 );
             }
@@ -567,7 +582,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.e.mov_rm_reg(
                     S::Q,
                     Scale::NoScale,
-                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
+                    self.slot(slot),
                     Reg::R11,
                 );
             }
@@ -581,12 +596,8 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.e.mov_reg_reg(S::Q, dst, reg);
             }
             Slot::Stack(slot) => {
-                self.e.mov_reg_rm(
-                    S::Q,
-                    Scale::NoScale,
-                    dst,
-                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
-                );
+                self.e
+                    .mov_reg_rm(S::Q, Scale::NoScale, dst, self.slot(slot));
             }
         };
     }
@@ -598,12 +609,8 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.e.mov_reg_reg(S::Q, dst, src);
             }
             Slot::Stack(slot) => {
-                self.e.mov_rm_reg(
-                    S::Q,
-                    Scale::NoScale,
-                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(slot)),
-                    src,
-                );
+                self.e
+                    .mov_rm_reg(S::Q, Scale::NoScale, self.slot(slot), src);
             }
         };
     }

@@ -1,4 +1,5 @@
 use super::BasicBlockIdx;
+use crate::ctx::UniqueString;
 
 /// A "virtual" register, in contrast to actual CPU registers.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -16,7 +17,7 @@ impl Inst {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Opcode {
     /// dest <- op
     Mov(VReg, VReg),
@@ -43,7 +44,7 @@ pub enum Opcode {
     LessEqual(VReg, VReg, VReg),
 
     /// dest <- string at index op
-    LoadString(VReg, u32),
+    LoadString(VReg, UniqueString),
     /// dest <- number op
     LoadNumber(VReg, f64),
     /// dest <- bool op
@@ -109,66 +110,66 @@ impl Inst {
         F: FnMut(VReg),
     {
         use Opcode::*;
-        match self.opcode {
+        match &self.opcode {
             Mov(op1, op2) => {
-                cb(op1);
-                cb(op2);
+                cb(*op1);
+                cb(*op2);
             }
             Add(_, op1, op2) => {
-                cb(op1);
-                cb(op2);
+                cb(*op1);
+                cb(*op2);
             }
             Sub(_, op1, op2) => {
-                cb(op1);
-                cb(op2);
+                cb(*op1);
+                cb(*op2);
             }
             Mul(_, op1, op2) => {
-                cb(op1);
-                cb(op2);
+                cb(*op1);
+                cb(*op2);
             }
             Div(_, op1, op2) => {
-                cb(op1);
-                cb(op2);
+                cb(*op1);
+                cb(*op2);
             }
 
             Neg(op1, op2) => {
-                cb(op1);
-                cb(op2);
+                cb(*op1);
+                cb(*op2);
             }
             Not(op1, op2) => {
-                cb(op1);
-                cb(op2);
+                cb(*op1);
+                cb(*op2);
             }
 
             Equal(_, op1, op2) => {
-                cb(op1);
-                cb(op2);
+                cb(*op1);
+                cb(*op2);
             }
             Less(_, op1, op2) => {
-                cb(op1);
-                cb(op2);
+                cb(*op1);
+                cb(*op2);
             }
             LessEqual(_, op1, op2) => {
-                cb(op1);
-                cb(op2);
+                cb(*op1);
+                cb(*op2);
             }
 
-            LoadString(op1, op2) => {
-                cb(op1);
+            LoadString(op1, _) => {
+                cb(*op1);
             }
-            LoadNumber(op1, op2) => {
-                cb(op1);
+            LoadNumber(op1, _) => {
+                cb(*op1);
             }
-            LoadBool(op1, op2) => {
-                cb(op1);
+            LoadBool(op1, _) => {
+                cb(*op1);
             }
             LoadNil(op1) => {
-                cb(op1);
+                cb(*op1);
             }
 
             Branch(_) => {}
             CondBranch(op1, _, _) => {
-                cb(op1);
+                cb(*op1);
             }
 
             Print(_) => {}

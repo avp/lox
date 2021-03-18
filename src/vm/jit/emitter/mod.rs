@@ -7,7 +7,7 @@ pub use imm::Immediate;
 pub use reg::{AddrMode, Reg, FP, S};
 
 // (base, index, offset)
-type RM = (Reg, Reg, i32);
+pub type RM = (Reg, Reg, i32);
 
 pub struct Emitter<'buf> {
     pub buf: &'buf mut [u8],
