@@ -533,7 +533,7 @@ fn encode_mod_rm(mode: AddrMode, rm: Reg, reg_opcode: u8) -> u8 {
     } else {
         rm.ord7()
     };
-    (mode.mode_mod() << 6) | (reg_opcode << 3) | (rm & 0b111)
+    (mode.mode_mod() << 6) | ((reg_opcode & 0b111) << 3) | (rm & 0b111)
 }
 
 fn log(scale: u32) -> u8 {
@@ -685,6 +685,13 @@ mod tests {
             Reg::R11,
         );
         check_str!(e, "mov qword ptr [rbp + 8], r11");
+        e.mov_rm_reg(
+            S::Q,
+            Scale::NoScale,
+            (Reg::RBP, Reg::NoIndex, 0x12345678),
+            Reg::R11,
+        );
+        check_str!(e, "mov qword ptr [rbp + 0x12345678], r11");
     }
 
     #[test]
@@ -694,6 +701,34 @@ mod tests {
         reset!(e);
         e.add_reg_reg(S::Q, Reg::RCX, Reg::RDX);
         check!(e, [0x48, 0x01, 0xd1]);
+    }
+
+    #[test]
+    fn test_add() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.add_fp_rm(
+            FP::Double,
+            Scale::NoScale,
+            Reg::XMM0,
+            (Reg::RBP, Reg::NoIndex, 8),
+        );
+        check_str!(e, "addsd xmm0, qword ptr [rbp + 8]");
+    }
+
+    #[test]
+    fn test_mul() {
+        let mut buf = [0u8; 0x100];
+        let mut e = Emitter::new(&mut buf);
+        reset!(e);
+        e.mul_fp_rm(
+            FP::Double,
+            Scale::NoScale,
+            Reg::XMM0,
+            (Reg::RBP, Reg::NoIndex, 8),
+        );
+        check_str!(e, "mulsd xmm0, qword ptr [rbp + 8]");
     }
 
     #[test]
@@ -920,7 +955,7 @@ mod tests {
     }
 
     #[test]
-    fn is_i8() {
+    fn test_is_i8() {
         use super::is_i8;
         assert!(is_i8(-120));
         assert!(is_i8(120));

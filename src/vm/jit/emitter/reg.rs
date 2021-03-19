@@ -260,3 +260,13 @@ impl AddrMode {
         self.ord() & 0b11
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mode_mod() {
+        assert_eq!(AddrMode::AtRegDisp32.mode_mod(), 0b10);
+    }
+}
