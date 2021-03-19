@@ -379,6 +379,9 @@ impl<'buf> Emitter<'buf> {
         );
     }
 
+    pub fn cmp_reg_reg(&mut self, s: S, dst: Reg, src: Reg) {
+        self.cmp_rm_reg(s, Scale::RegScale, (dst, Reg::NoIndex, 0), src);
+    }
     pub fn cmp_reg_rm(&mut self, s: S, scale: Scale, dst: Reg, src: RM) {
         self.op_reg_rm(s, scale, 0x3a, dst, src);
     }
@@ -826,6 +829,8 @@ mod tests {
             0xabu32,
         );
         check_str!(e, "cmp dword ptr [rbx], 0xab");
+        e.cmp_reg_reg(S::Q, Reg::RAX, Reg::RBX);
+        check_str!(e, "cmp rax, rbx");
     }
 
     #[test]

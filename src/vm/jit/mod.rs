@@ -161,6 +161,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
 
     fn compile_inst(&mut self, inst: &lir::Inst) {
         use lir::Opcode::*;
+        use regalloc::Slot;
         match &inst.opcode {
             Mov(dst, src) => {
                 self.mov_vreg_vreg(*dst, *src);
@@ -202,6 +203,61 @@ impl<'ctx, 'lir> Jit<'_, '_> {
             &Div(dst, r1, r2) => {
                 self.mov_vreg_vreg(dst, r1);
                 self.binop_vreg_vreg(ast::BinOpKind::Div, dst, r2);
+            }
+            &Equal(dst, r1, r2) => {
+                match self.slot(dst) {
+                    Slot::Reg(reg) => {
+                        self.setup_bool(reg);
+                    }
+                    Slot::Stack(_) => {
+                        self.setup_bool(Reg::R12);
+                    }
+                }
+                match (self.slot(r1), self.slot(r2)) {
+                    (Slot::Reg(r1), Slot::Reg(r2)) => {
+                        self.e.cmp_reg_reg(S::Q, r1, r2);
+                        self.e.cset(emitter::CCode::E, Reg::AL);
+                    }
+                    (Slot::Reg(r1), Slot::Stack(r2)) => {
+                        self.e.cmp_reg_rm(
+                            S::Q,
+                            Scale::NoScale,
+                            r1,
+                            self.stack_slot(r2),
+                        );
+                    }
+                    (Slot::Stack(r1), Slot::Reg(r2)) => {
+                        self.e.cmp_rm_reg(
+                            S::Q,
+                            Scale::NoScale,
+                            self.stack_slot(r1),
+                            r2,
+                        );
+                    }
+                    (Slot::Stack(r1), Slot::Stack(r2)) => {
+                        self.e.mov_reg_rm(
+                            S::Q,
+                            Scale::NoScale,
+                            Reg::R11,
+                            self.stack_slot(r2),
+                        );
+                        self.e.cmp_rm_reg(
+                            S::Q,
+                            Scale::NoScale,
+                            self.stack_slot(r1),
+                            Reg::R11,
+                        );
+                    }
+                };
+                match self.slot(dst) {
+                    Slot::Reg(reg) => {
+                        self.e.cset(emitter::CCode::E, reg.low_byte());
+                    }
+                    Slot::Stack(_) => {
+                        self.e.cset(emitter::CCode::E, Reg::R12.low_byte());
+                        self.mov_vreg_reg(dst, Reg::R12);
+                    }
+                }
             }
             &Print(reg) => {
                 self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
@@ -485,12 +541,16 @@ impl<'ctx, 'lir> Jit<'_, '_> {
         // }
     }
 
+    fn slot(&self, vreg: VReg) -> regalloc::Slot {
+        self.alloc_map[vreg.0 as usize]
+    }
+
     fn scratch_disp(&self, slot: u32) -> i32 {
         // Go one below because the stack grows up.
         (slot as i32 + 1) * -8
     }
 
-    fn slot(&self, slot: u32) -> RM {
+    fn stack_slot(&self, slot: u32) -> RM {
         (
             Reg::RBP,
             Reg::NoIndex,
@@ -508,7 +568,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
 
     fn binop_vreg_vreg(&mut self, kind: ast::BinOpKind, dst: VReg, src: VReg) {
         use regalloc::Slot;
-        match self.alloc_map[dst.0 as usize] {
+        match self.slot(dst) {
             Slot::Reg(reg) => {
                 self.need_number(reg);
                 self.fp_from_reg(FP::Double, Reg::XMM0, reg);
@@ -520,7 +580,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                     FP::Double,
                     Scale::NoScale,
                     Reg::XMM0,
-                    self.slot(slot),
+                    self.stack_slot(slot),
                 );
             }
         }
@@ -538,7 +598,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
             Slot::Stack(slot) => {
                 self.mov_reg_vreg(Reg::R11, src);
                 self.need_number(Reg::R11);
-                self.slot(slot)
+                self.stack_slot(slot)
             }
         };
         match kind {
@@ -564,7 +624,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.e.mov_rm_fp(
                     FP::Double,
                     Scale::NoScale,
-                    self.slot(slot),
+                    self.stack_slot(slot),
                     Reg::XMM0,
                 );
             }
@@ -582,7 +642,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.e.mov_rm_reg(
                     S::Q,
                     Scale::NoScale,
-                    self.slot(slot),
+                    self.stack_slot(slot),
                     Reg::R11,
                 );
             }
@@ -596,8 +656,12 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.e.mov_reg_reg(S::Q, dst, reg);
             }
             Slot::Stack(slot) => {
-                self.e
-                    .mov_reg_rm(S::Q, Scale::NoScale, dst, self.slot(slot));
+                self.e.mov_reg_rm(
+                    S::Q,
+                    Scale::NoScale,
+                    dst,
+                    self.stack_slot(slot),
+                );
             }
         };
     }
@@ -609,8 +673,12 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.e.mov_reg_reg(S::Q, dst, src);
             }
             Slot::Stack(slot) => {
-                self.e
-                    .mov_rm_reg(S::Q, Scale::NoScale, self.slot(slot), src);
+                self.e.mov_rm_reg(
+                    S::Q,
+                    Scale::NoScale,
+                    self.stack_slot(slot),
+                    src,
+                );
             }
         };
     }
@@ -705,11 +773,11 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     }
 
     fn setup_bool(&mut self, reg: Reg) {
-        // clear rax and store the result
+        // clear reg and store the result
         self.e.xor_reg_reg(S::Q, reg, reg);
         // Store the tag in the top 32 bits.
         self.e.mov_reg_imm::<u32>(
-            Reg::EAX,
+            reg.low_word(),
             (value::BOOL_TAG << (value::NUM_DATA_BITS - 32)) as u32,
         );
         self.e.shl_reg_imm(S::Q, reg, 32);

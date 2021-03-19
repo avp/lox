@@ -70,21 +70,33 @@ pub enum Reg {
 
     R10,
     R10D,
+    R10W,
+    R10B,
 
     R11,
     R11D,
+    R11W,
+    R11B,
 
     R12,
     R12D,
+    R12W,
+    R12B,
 
     R13,
     R13D,
+    R13W,
+    R13B,
 
     R14,
     R14D,
+    R14W,
+    R14B,
 
     R15,
     R15D,
+    R15W,
+    R15B,
 
     MM0,
     XMM0,
@@ -164,21 +176,33 @@ impl Reg {
 
             R10 => 10,
             R10D => 10,
+            R10W => 10,
+            R10B => 10,
 
             R11 => 11,
             R11D => 11,
+            R11W => 11,
+            R11B => 11,
 
             R12 => 12,
             R12D => 12,
+            R12W => 12,
+            R12B => 12,
 
             R13 => 13,
             R13D => 13,
+            R13W => 13,
+            R13B => 13,
 
             R14 => 14,
             R14D => 14,
+            R14W => 14,
+            R14B => 14,
 
             R15 => 15,
             R15D => 15,
+            R15W => 15,
+            R15B => 15,
 
             MM0 => 0,
             XMM0 => 0,
@@ -200,6 +224,180 @@ impl Reg {
             NONE => 0,
             NoIndex => 4,
             ModSIB => 5,
+        }
+    }
+
+    pub fn low_word(&self) -> Reg {
+        use Reg::*;
+        match self {
+            RAX => EAX,
+            EAX => EAX,
+            AX => EAX,
+            AL => EAX,
+
+            RCX => ECX,
+            ECX => ECX,
+            CX => ECX,
+            CL => ECX,
+
+            RDX => EDX,
+            EDX => EDX,
+            DX => EDX,
+            DL => EDX,
+
+            RBX => EBX,
+            EBX => EBX,
+            BX => EBX,
+            BL => EBX,
+
+            RSP => ESP,
+            ESP => ESP,
+            SP => ESP,
+            AH => ESP,
+
+            RBP => EBP,
+            EBP => EBP,
+            BP => EBP,
+            CH => EBP,
+
+            RSI => ESI,
+            ESI => ESI,
+            SI => ESI,
+            DH => ESI,
+
+            RDI => EDI,
+            EDI => EDI,
+            DI => EDI,
+            BH => EDI,
+
+            R8 => R8W,
+            R8D => R8W,
+            R8W => R8W,
+            R8B => R8W,
+
+            R9 => R9W,
+            R9D => R9W,
+            R9W => R9W,
+            R9B => R9W,
+
+            R10 => R10W,
+            R10D => R10W,
+            R10W => R10W,
+            R10B => R10W,
+
+            R11 => R11W,
+            R11D => R11W,
+            R11W => R11W,
+            R11B => R11W,
+
+            R12 => R12W,
+            R12D => R12W,
+            R12W => R12W,
+            R12B => R12W,
+
+            R13 => R13W,
+            R13D => R13W,
+            R13W => R13W,
+            R13B => R13W,
+
+            R14 => R14W,
+            R14D => R14W,
+            R14W => R14W,
+            R14B => R14W,
+
+            R15 => R15W,
+            R15D => R15W,
+            R15W => R15W,
+            R15B => R15W,
+
+            _ => panic!("Invalid low byte: {:?}", self),
+        }
+    }
+
+    pub fn low_byte(&self) -> Reg {
+        use Reg::*;
+        match self {
+            RAX => AL,
+            EAX => AL,
+            AX => AL,
+            AL => AL,
+
+            RCX => CL,
+            ECX => CL,
+            CX => CL,
+            CL => CL,
+
+            RDX => DL,
+            EDX => DL,
+            DX => DL,
+            DL => DL,
+
+            RBX => BL,
+            EBX => BL,
+            BX => BL,
+            BL => BL,
+
+            RSP => AH,
+            ESP => AH,
+            SP => AH,
+            AH => AH,
+
+            RBP => CH,
+            EBP => CH,
+            BP => CH,
+            CH => CH,
+
+            RSI => DH,
+            ESI => DH,
+            SI => DH,
+            DH => DH,
+
+            RDI => BH,
+            EDI => BH,
+            DI => BH,
+            BH => BH,
+
+            R8 => R8B,
+            R8D => R8B,
+            R8W => R8B,
+            R8B => R8B,
+
+            R9 => R9B,
+            R9D => R9B,
+            R9W => R9B,
+            R9B => R9B,
+
+            R10 => R10B,
+            R10D => R10B,
+            R10W => R10B,
+            R10B => R10B,
+
+            R11 => R11B,
+            R11D => R11B,
+            R11W => R11B,
+            R11B => R11B,
+
+            R12 => R12B,
+            R12D => R12B,
+            R12W => R12B,
+            R12B => R12B,
+
+            R13 => R13B,
+            R13D => R13B,
+            R13W => R13B,
+            R13B => R13B,
+
+            R14 => R14B,
+            R14D => R14B,
+            R14W => R14B,
+            R14B => R14B,
+
+            R15 => R15B,
+            R15D => R15B,
+            R15W => R15B,
+            R15B => R15B,
+
+            _ => panic!("Invalid low byte: {:?}", self),
         }
     }
 
