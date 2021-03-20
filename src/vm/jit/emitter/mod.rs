@@ -218,6 +218,9 @@ impl<'buf> Emitter<'buf> {
         self.emit_mod_rm(S::L, scale, src.ord7(), dst);
     }
 
+    pub fn nop(&mut self) {
+        self.emit(0x90);
+    }
     pub fn pushq(&mut self, reg: Reg) {
         self.emit(0x50 + reg.ord7());
     }

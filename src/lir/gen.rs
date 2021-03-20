@@ -148,12 +148,10 @@ impl<'ctx> Generator<'ctx> {
                         self.builder.make_inst(Not(vreg, vreg));
                     }
                     ast::BinOpKind::Greater => {
-                        self.builder.make_inst(LessEqual(vreg, lhs, rhs));
-                        self.builder.make_inst(Not(vreg, vreg));
+                        self.builder.make_inst(Greater(vreg, lhs, rhs));
                     }
                     ast::BinOpKind::GreaterEqual => {
-                        self.builder.make_inst(Less(vreg, lhs, rhs));
-                        self.builder.make_inst(Not(vreg, vreg));
+                        self.builder.make_inst(GreaterEqual(vreg, lhs, rhs));
                     }
                     ast::BinOpKind::Less => {
                         self.builder.make_inst(Less(vreg, lhs, rhs))

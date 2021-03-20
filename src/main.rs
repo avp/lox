@@ -77,7 +77,7 @@ fn run(
                 Ok(sem) => {
                     let lir = lir::generate_lir(&ctx, &ast);
                     if opt.dump_lir {
-                        println!("{:?}", lir.get_functions());
+                        println!("{}", &lir);
                     }
                     let mut vm = vm::VM::new(opt.dump_asm);
                     match vm.run(lir) {

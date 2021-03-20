@@ -2,6 +2,7 @@
 //! Can perform very simple optimizations maybe.
 
 use crate::ctx::{Ctx, UniqueString};
+use std::fmt;
 
 mod inst;
 pub use inst::{Inst, Opcode, VReg};
@@ -14,6 +15,15 @@ pub struct Program<'ctx> {
 
     /// List of functions, where the first function is the global function.
     functions: Vec<Function>,
+}
+
+impl<'ctx> fmt::Display for Program<'ctx> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for func in &self.functions {
+            write!(f, "{}", func)?;
+        }
+        Ok(())
+    }
 }
 
 impl<'ctx> Program<'ctx> {
@@ -59,6 +69,17 @@ pub struct Function {
 
     /// Number of VRegs needed to run this Function.
     stack_size: u32,
+}
+
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (idx, bb) in self.blocks.iter().enumerate() {
+            write!(f, "BB{}:\n", idx)?;
+            write!(f, "{}", bb)?;
+            write!(f, "\n")?;
+        }
+        Ok(())
+    }
 }
 
 impl Function {
@@ -112,6 +133,15 @@ pub struct BasicBlockIdx(pub usize);
 #[derive(Debug)]
 pub struct BasicBlock {
     insts: Vec<Inst>,
+}
+
+impl fmt::Display for BasicBlock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (idx, inst) in self.insts.iter().enumerate() {
+            write!(f, "{}: {:?}\n", idx, inst)?;
+        }
+        Ok(())
+    }
 }
 
 impl BasicBlock {

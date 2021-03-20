@@ -29,6 +29,7 @@ struct RegAllocator<'lir> {
     block_liveness: Vec<BlockLiveness>,
 }
 
+#[allow(dead_code)]
 impl RegAllocator<'_> {
     pub fn new(func: &lir::Function) -> RegAllocator {
         let stack_size = func.get_stack_size() as usize;

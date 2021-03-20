@@ -42,6 +42,10 @@ pub enum Opcode {
     Less(VReg, VReg, VReg),
     /// dest <- op1 <= op2
     LessEqual(VReg, VReg, VReg),
+    /// dest <- op1 > op2
+    Greater(VReg, VReg, VReg),
+    /// dest <- op1 >= op2
+    GreaterEqual(VReg, VReg, VReg),
 
     /// dest <- string at index op
     LoadString(VReg, UniqueString),
@@ -90,6 +94,8 @@ impl Inst {
             Equal(reg, _, _) => Some(reg),
             Less(reg, _, _) => Some(reg),
             LessEqual(reg, _, _) => Some(reg),
+            Greater(reg, _, _) => Some(reg),
+            GreaterEqual(reg, _, _) => Some(reg),
 
             LoadString(reg, _) => Some(reg),
             LoadNumber(reg, _) => Some(reg),
@@ -150,6 +156,14 @@ impl Inst {
                 cb(*op2);
             }
             LessEqual(_, op1, op2) => {
+                cb(*op1);
+                cb(*op2);
+            }
+            Greater(_, op1, op2) => {
+                cb(*op1);
+                cb(*op2);
+            }
+            GreaterEqual(_, op1, op2) => {
                 cb(*op1);
                 cb(*op2);
             }

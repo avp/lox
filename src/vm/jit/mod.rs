@@ -161,13 +161,18 @@ impl<'ctx, 'lir> Jit<'_, '_> {
 
     fn compile_inst(&mut self, inst: &lir::Inst) {
         use lir::Opcode::*;
-        use regalloc::Slot;
         match &inst.opcode {
             Mov(dst, src) => {
                 self.mov_vreg_vreg(*dst, *src);
             }
             Ret(reg) => {
                 self.mov_reg_vreg(Reg::RAX, *reg);
+                self.e.jmp(emitter::OffsetType::Int32, 0.into());
+                self.relocs.push(Reloc::new(
+                    self.e.get_index() - 4,
+                    Label::Epilogue,
+                    RelocKind::Int32,
+                ));
             }
             LoadBool(vreg, val) => {
                 self.mov_vreg_imm(*vreg, Value::bool(*val));
@@ -215,10 +220,20 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.eq_vreg_vreg(emitter::CCode::E, dst, r1, r2);
             }
             &Less(dst, r1, r2) => {
-                unimplemented!();
+                self.mov_vreg_vreg(dst, r1);
+                self.compare_vreg_vreg(emitter::CCode::B, dst, r2);
             }
             &LessEqual(dst, r1, r2) => {
-                unimplemented!();
+                self.mov_vreg_vreg(dst, r1);
+                self.compare_vreg_vreg(emitter::CCode::BE, dst, r2);
+            }
+            &Greater(dst, r1, r2) => {
+                self.mov_vreg_vreg(dst, r1);
+                self.compare_vreg_vreg(emitter::CCode::A, dst, r2);
+            }
+            &GreaterEqual(dst, r1, r2) => {
+                self.mov_vreg_vreg(dst, r1);
+                self.compare_vreg_vreg(emitter::CCode::AE, dst, r2);
             }
             &Print(reg) => {
                 self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
@@ -590,6 +605,55 @@ impl<'ctx, 'lir> Jit<'_, '_> {
         }
     }
 
+    fn compare_vreg_vreg(&mut self, op: emitter::CCode, dst: VReg, src: VReg) {
+        use regalloc::Slot;
+        match self.slot(dst) {
+            Slot::Reg(reg) => {
+                self.need_number(reg);
+                self.fp_from_reg(FP::Double, Reg::XMM0, reg);
+                self.setup_bool(reg);
+            }
+            Slot::Stack(slot) => {
+                self.mov_reg_vreg(Reg::R11, dst);
+                self.need_number(Reg::R11);
+                self.e.mov_fp_rm(
+                    FP::Double,
+                    Scale::NoScale,
+                    Reg::XMM0,
+                    self.stack_slot(slot),
+                );
+                self.setup_bool(Reg::R12);
+            }
+        }
+        let rm = match self.slot(src) {
+            Slot::Reg(reg) => {
+                self.need_number(reg);
+                self.e.mov_rm_reg(
+                    S::Q,
+                    Scale::NoScale,
+                    (Reg::RBP, Reg::NoIndex, self.scratch_disp(0)),
+                    reg,
+                );
+                (Reg::RBP, Reg::NoIndex, self.scratch_disp(0))
+            }
+            Slot::Stack(slot) => {
+                self.mov_reg_vreg(Reg::R11, src);
+                self.need_number(Reg::R11);
+                self.stack_slot(slot)
+            }
+        };
+        self.e.ucomisd_reg_rm(Reg::XMM0, rm);
+        match self.slot(dst) {
+            Slot::Reg(reg) => {
+                self.e.cset(op, reg.low_byte());
+            }
+            Slot::Stack(_) => {
+                self.e.cset(op, Reg::R12.low_byte());
+                self.mov_vreg_reg(dst, Reg::R12);
+            }
+        }
+    }
+
     fn binop_vreg_vreg(&mut self, kind: ast::BinOpKind, dst: VReg, src: VReg) {
         use regalloc::Slot;
         match self.slot(dst) {
@@ -759,6 +823,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     }
 
     fn need_number(&mut self, src: Reg) {
+        return;
         self.e.mov_rm_reg(
             S::Q,
             Scale::NoScale,
