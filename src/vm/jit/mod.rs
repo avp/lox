@@ -204,60 +204,21 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.mov_vreg_vreg(dst, r1);
                 self.binop_vreg_vreg(ast::BinOpKind::Div, dst, r2);
             }
+            &Not(dst, src) => {
+                self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
+                self.mov_reg_vreg(Reg::RSI, src);
+                self.call_builtin(builtins::to_bool);
+                self.e.xor_reg_imm(S::B, Reg::AL, 1i8);
+                self.mov_vreg_reg(dst, Reg::RAX);
+            }
             &Equal(dst, r1, r2) => {
-                match self.slot(dst) {
-                    Slot::Reg(reg) => {
-                        self.setup_bool(reg);
-                    }
-                    Slot::Stack(_) => {
-                        self.setup_bool(Reg::R12);
-                    }
-                }
-                match (self.slot(r1), self.slot(r2)) {
-                    (Slot::Reg(r1), Slot::Reg(r2)) => {
-                        self.e.cmp_reg_reg(S::Q, r1, r2);
-                        self.e.cset(emitter::CCode::E, Reg::AL);
-                    }
-                    (Slot::Reg(r1), Slot::Stack(r2)) => {
-                        self.e.cmp_reg_rm(
-                            S::Q,
-                            Scale::NoScale,
-                            r1,
-                            self.stack_slot(r2),
-                        );
-                    }
-                    (Slot::Stack(r1), Slot::Reg(r2)) => {
-                        self.e.cmp_rm_reg(
-                            S::Q,
-                            Scale::NoScale,
-                            self.stack_slot(r1),
-                            r2,
-                        );
-                    }
-                    (Slot::Stack(r1), Slot::Stack(r2)) => {
-                        self.e.mov_reg_rm(
-                            S::Q,
-                            Scale::NoScale,
-                            Reg::R11,
-                            self.stack_slot(r2),
-                        );
-                        self.e.cmp_rm_reg(
-                            S::Q,
-                            Scale::NoScale,
-                            self.stack_slot(r1),
-                            Reg::R11,
-                        );
-                    }
-                };
-                match self.slot(dst) {
-                    Slot::Reg(reg) => {
-                        self.e.cset(emitter::CCode::E, reg.low_byte());
-                    }
-                    Slot::Stack(_) => {
-                        self.e.cset(emitter::CCode::E, Reg::R12.low_byte());
-                        self.mov_vreg_reg(dst, Reg::R12);
-                    }
-                }
+                self.eq_vreg_vreg(emitter::CCode::E, dst, r1, r2);
+            }
+            &Less(dst, r1, r2) => {
+                unimplemented!();
+            }
+            &LessEqual(dst, r1, r2) => {
+                unimplemented!();
             }
             &Print(reg) => {
                 self.e.mov_reg_reg(S::Q, Reg::RDI, REG_STATE);
@@ -564,6 +525,69 @@ impl<'ctx, 'lir> Jit<'_, '_> {
         }
         self.mov_reg_vreg(Reg::R11, src);
         self.mov_vreg_reg(dst, Reg::R11);
+    }
+
+    fn eq_vreg_vreg(
+        &mut self,
+        op: emitter::CCode,
+        dst: VReg,
+        r1: VReg,
+        r2: VReg,
+    ) {
+        use regalloc::Slot;
+        match self.slot(dst) {
+            Slot::Reg(reg) => {
+                self.setup_bool(reg);
+            }
+            Slot::Stack(_) => {
+                self.setup_bool(Reg::R12);
+            }
+        };
+        match (self.slot(r1), self.slot(r2)) {
+            (Slot::Reg(r1), Slot::Reg(r2)) => {
+                self.e.cmp_reg_reg(S::Q, r1, r2);
+                self.e.cset(op, Reg::AL);
+            }
+            (Slot::Reg(r1), Slot::Stack(r2)) => {
+                self.e.cmp_reg_rm(
+                    S::Q,
+                    Scale::NoScale,
+                    r1,
+                    self.stack_slot(r2),
+                );
+            }
+            (Slot::Stack(r1), Slot::Reg(r2)) => {
+                self.e.cmp_rm_reg(
+                    S::Q,
+                    Scale::NoScale,
+                    self.stack_slot(r1),
+                    r2,
+                );
+            }
+            (Slot::Stack(r1), Slot::Stack(r2)) => {
+                self.e.mov_reg_rm(
+                    S::Q,
+                    Scale::NoScale,
+                    Reg::R11,
+                    self.stack_slot(r2),
+                );
+                self.e.cmp_rm_reg(
+                    S::Q,
+                    Scale::NoScale,
+                    self.stack_slot(r1),
+                    Reg::R11,
+                );
+            }
+        };
+        match self.slot(dst) {
+            Slot::Reg(reg) => {
+                self.e.cset(emitter::CCode::E, reg.low_byte());
+            }
+            Slot::Stack(_) => {
+                self.e.cset(emitter::CCode::E, Reg::R12.low_byte());
+                self.mov_vreg_reg(dst, Reg::R12);
+            }
+        }
     }
 
     fn binop_vreg_vreg(&mut self, kind: ast::BinOpKind, dst: VReg, src: VReg) {
