@@ -407,11 +407,24 @@ impl Reg {
 
     pub fn is_fp(&self) -> bool {
         use Reg::*;
-        match self {
-            MM0 | XMM0 | MM1 | XMM1 | MM2 | XMM2 | MM3 | XMM3 | MM4 | XMM4
-            | MM5 | XMM5 | MM6 | XMM6 | MM7 | XMM7 => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            MM0 | XMM0
+                | MM1
+                | XMM1
+                | MM2
+                | XMM2
+                | MM3
+                | XMM3
+                | MM4
+                | XMM4
+                | MM5
+                | XMM5
+                | MM6
+                | XMM6
+                | MM7
+                | XMM7
+        )
     }
 }
 

@@ -86,7 +86,7 @@ impl LoxString {
         }
     }
 
-    pub fn data<'heap>(&'heap self) -> &str {
+    pub fn data(&self) -> &str {
         unsafe {
             let top: *const u8 = std::mem::transmute(self as *const Self);
             let data = top.offset(offset_of!(Self, data) as isize);
@@ -115,10 +115,7 @@ impl Cell for Environment {
 }
 
 impl Environment {
-    pub fn new<'heap>(
-        heap: &'heap mut Heap,
-        size: usize,
-    ) -> &'heap mut Environment {
+    pub fn new(heap: &mut Heap, size: usize) -> &mut Environment {
         let ptr: *mut u8 = heap.alloc(Self::alloc_size(size));
         let refn: &mut Environment = unsafe { std::mem::transmute(ptr) };
         refn.kind = Self::get_kind();
@@ -126,25 +123,22 @@ impl Environment {
 
         unsafe {
             let data = std::slice::from_raw_parts_mut(
-                std::mem::transmute(
-                    ptr.offset(offset_of!(Self, data) as isize),
-                ),
+                ptr.offset(offset_of!(Self, data) as isize) as *mut Value,
                 size,
             );
             #[cfg(debug_assertions)]
-            for i in 0..size {
-                data[i] = Value::nil();
+            for slot in data.iter_mut().take(size) {
+                *slot = Value::nil();
             }
-            std::mem::transmute(ptr)
+            &mut *(ptr as *mut Environment)
         }
     }
 
-    pub fn at<'heap>(&'heap self, idx: usize) -> Value {
+    pub fn at(&self, idx: usize) -> Value {
         unsafe {
-            let top: *const u8 = std::mem::transmute(self as *const Self);
-            let data: *const Value = std::mem::transmute(
-                top.offset(offset_of!(Self, data) as isize),
-            );
+            let top: *const u8 = self as *const Self as *const u8;
+            let data: *const Value =
+                top.offset(offset_of!(Self, data) as isize) as *const Value;
             let slice: &[Value] =
                 std::slice::from_raw_parts::<Value>(data, self.size);
             slice[idx].clone()

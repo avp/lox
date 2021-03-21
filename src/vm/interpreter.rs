@@ -2,7 +2,7 @@ use super::{VMState, Value};
 use crate::lir;
 
 pub fn run(state: &mut VMState, func: &lir::Function) -> Value {
-    use lir::{Opcode::*, VReg};
+    use lir::Opcode::*;
 
     let cur_bb = func.get_entry_block();
     let mut ip = 0;

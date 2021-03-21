@@ -1,7 +1,6 @@
 use super::emitter::Reg;
 use crate::lir;
 use crate::support::slice_get_2_mut;
-use bitvec::prelude::*;
 use bitvec::vec::BitVec;
 
 #[derive(Debug, Copy, Clone)]
@@ -121,8 +120,12 @@ impl RegAllocator<'_> {
         // Start with intervals that contain only the segment.
     }
 
-    fn get_inst_number(&self, bb: lir::BasicBlockIdx, inst_idx: usize) {
-        self.block_offsets[bb.0] + inst_idx;
+    fn get_inst_number(
+        &self,
+        bb: lir::BasicBlockIdx,
+        inst_idx: usize,
+    ) -> usize {
+        self.block_offsets[bb.0] + inst_idx
     }
 }
 

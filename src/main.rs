@@ -74,7 +74,7 @@ fn run(
                     }
                     Err(format_err!("Validation failed"))
                 }
-                Ok(sem) => {
+                Ok(_sem) => {
                     let lir = lir::generate_lir(&ctx, &ast);
                     if opt.dump_lir {
                         println!("{}", &lir);

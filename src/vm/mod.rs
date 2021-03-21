@@ -43,10 +43,10 @@ pub struct VM {
 impl VM {
     pub fn new(dump_asm: bool) -> VM {
         let stack = unsafe {
-            let ptr: *mut [Value; STACK_SIZE] =
-                std::mem::transmute(std::alloc::alloc(
-                    std::alloc::Layout::from_size_align(STACK_SIZE, 8).unwrap(),
-                ));
+            let ptr: *mut [Value; STACK_SIZE] = std::alloc::alloc(
+                std::alloc::Layout::from_size_align(STACK_SIZE, 8).unwrap(),
+            )
+                as *mut [Value; STACK_SIZE];
             Box::from_raw(ptr)
         };
         VM {
@@ -62,7 +62,7 @@ impl VM {
         }
     }
 
-    pub fn run<'ctx>(&mut self, lir: lir::Program<'ctx>) -> Option<Value> {
+    pub fn run(&mut self, lir: lir::Program) -> Option<Value> {
         let fun_opt = JitContext::compile(self, lir.get_global_function());
         let result = match fun_opt {
             Some(fun) => fun(&mut self.state as *mut VMState),

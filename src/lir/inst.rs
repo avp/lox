@@ -68,15 +68,11 @@ pub enum Opcode {
     Ret(VReg),
 }
 
+#[allow(dead_code)]
 impl Inst {
     pub fn is_terminator(&self) -> bool {
         use Opcode::*;
-        match &self.opcode {
-            Branch(..) => true,
-            CondBranch(..) => true,
-            Ret(..) => true,
-            _ => false,
-        }
+        matches!(&self.opcode, Branch(..) | CondBranch(..) | Ret(..))
     }
 
     pub fn def(&self) -> Option<VReg> {
