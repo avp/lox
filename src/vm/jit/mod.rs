@@ -16,6 +16,8 @@ use mem::ExecHeap;
 
 use std::collections::HashMap;
 
+/// Context in which a JIT function is compiled.
+/// Contains the executable pages.
 pub struct JitContext {
     heap: ExecHeap,
     dump_asm: bool,
@@ -43,6 +45,8 @@ impl JitContext {
     }
 }
 
+/// A Label is used as a placeholder to resolve relocations after generating
+/// the code.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum Label {
     BasicBlock(lir::BasicBlockIdx),
@@ -61,8 +65,12 @@ enum RelocKind {
 
 #[derive(Debug)]
 struct Reloc {
+    /// Location of the source of the Reloc.
     address: usize,
+
+    /// Destination of the jump.
     target: Label,
+
     kind: RelocKind,
 }
 
@@ -165,7 +173,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
             }
             Ret(reg) => {
                 self.mov_reg_vreg(Reg::RAX, *reg);
-                self.e.jmp(emitter::OffsetType::Int32, 0.into());
+                self.e.jmp(emitter::OffsetType::Int32, 0);
                 self.relocs.push(Reloc::new(
                     self.e.get_index() - 4,
                     Label::Epilogue,
@@ -239,7 +247,7 @@ impl<'ctx, 'lir> Jit<'_, '_> {
                 self.call_builtin(builtins::println);
             }
             &Branch(bb) => {
-                self.e.jmp(emitter::OffsetType::Int32, 0.into());
+                self.e.jmp(emitter::OffsetType::Int32, 0);
                 self.relocs.push(Reloc::new(
                     self.e.get_index() - 4,
                     Label::BasicBlock(bb),
@@ -253,18 +261,15 @@ impl<'ctx, 'lir> Jit<'_, '_> {
 
                 // Check bottom bits of rax to see if the bool is true or false.
                 self.e.test_reg_reg(S::B, Reg::AL, Reg::AL);
-                self.e.cjump(
-                    emitter::CCode::E,
-                    emitter::OffsetType::Int32,
-                    0.into(),
-                );
+                self.e
+                    .cjump(emitter::CCode::E, emitter::OffsetType::Int32, 0);
                 self.relocs.push(Reloc::new(
                     self.e.get_index() - 4,
                     Label::BasicBlock(bb_false),
                     RelocKind::Int32,
                 ));
 
-                self.e.jmp(emitter::OffsetType::Int32, 0.into());
+                self.e.jmp(emitter::OffsetType::Int32, 0);
                 self.relocs.push(Reloc::new(
                     self.e.get_index() - 4,
                     Label::BasicBlock(bb_true),
@@ -275,15 +280,20 @@ impl<'ctx, 'lir> Jit<'_, '_> {
         };
     }
 
+    /// Return the register allocated Slot for a given VReg.
     fn slot(&self, vreg: VReg) -> regalloc::Slot {
         self.alloc_map[vreg.0 as usize]
     }
 
+    /// Return the offset for a stack slot used for scratch.
+    /// `slot` is the index of the scratch slot.
     fn scratch_disp(&self, slot: u32) -> i32 {
         // Go one below because the stack grows up.
         (slot as i32 + 1) * -8
     }
 
+    /// Return the RM for a register allocated slot, accounting for the offset
+    /// imposed by scratch registers.
     fn stack_slot(&self, slot: u32) -> RM {
         (
             Reg::RBP,
@@ -293,11 +303,31 @@ impl<'ctx, 'lir> Jit<'_, '_> {
     }
 
     fn mov_vreg_vreg(&mut self, dst: VReg, src: VReg) {
+        use regalloc::Slot;
         if dst == src {
             return;
         }
-        self.mov_reg_vreg(Reg::R11, src);
-        self.mov_vreg_reg(dst, Reg::R11);
+        match (self.slot(dst), self.slot(src)) {
+            (Slot::Reg(dst), Slot::Reg(src)) => {
+                self.e.mov_reg_reg(S::Q, dst, src)
+            }
+            (Slot::Reg(dst), Slot::Stack(src)) => self.e.mov_reg_rm(
+                S::Q,
+                Scale::NoScale,
+                dst,
+                self.stack_slot(src),
+            ),
+            (Slot::Stack(dst), Slot::Reg(src)) => self.e.mov_rm_reg(
+                S::Q,
+                Scale::NoScale,
+                self.stack_slot(dst),
+                src,
+            ),
+            (Slot::Stack(_), Slot::Stack(_)) => {
+                self.mov_reg_vreg(Reg::R11, src);
+                self.mov_vreg_reg(dst, Reg::R11);
+            }
+        }
     }
 
     fn eq_vreg_vreg(

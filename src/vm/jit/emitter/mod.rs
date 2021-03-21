@@ -599,7 +599,7 @@ mod tests {
                 .build()
                 .unwrap();
             let asm = format!("{}", cs.disasm_count($emit.buf, 0, 1).unwrap());
-            assert!(asm.trim().ends_with($str), format!("Found: {}", asm));
+            assert!(asm.trim().ends_with($str), "Found: {}", asm);
             reset!($emit);
         }};
     }
