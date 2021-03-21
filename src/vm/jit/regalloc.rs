@@ -116,8 +116,40 @@ impl RegAllocator<'_> {
     }
 
     fn calc_liveness_intervals(&mut self) {
-        let mut changed = false;
         // Start with intervals that contain only the segment.
+        for (i, interval) in self.inst_intervals.iter_mut().enumerate() {
+            // The value starts to be live at instruction `i + 1`.
+            *interval = Interval::new(i + 1, i + 1);
+        }
+
+        for (bb_idx, &bb_start) in self.block_offsets.iter().enumerate() {
+            let liveness = &self.block_liveness[bb_idx];
+            let bb_idx = lir::BasicBlockIdx(bb_idx);
+            let bb_end = bb_start + self.func.get_block(bb_idx).insts().len();
+
+            // Check for registers which are not touched by this basic block.
+            // The register at `i` is untouched by the block.
+            for (i, (&leaves, &enters)) in
+                liveness.live_out.iter().zip(&liveness.live_in).enumerate()
+            {
+                if leaves && enters {
+                    self.inst_intervals[i]
+                        .add_segment(Segment::new(bb_start, bb_end + 1));
+                }
+            }
+
+            for (inst_idx, inst) in
+                self.func.get_block(bb_idx).insts().iter().enumerate()
+            {
+                let inst_offset = self.get_inst_number(bb_idx, inst_idx);
+
+                // If this register is leaving the basic block,
+                // simply extend until the end of the basic block.
+                if liveness.live_out[inst_offset] {}
+            }
+        }
+
+        unimplemented!();
     }
 
     fn get_inst_number(
