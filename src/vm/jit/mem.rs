@@ -64,3 +64,11 @@ impl Pool {
         }
     }
 }
+
+impl Drop for Pool {
+    fn drop(&mut self) {
+        unsafe {
+            libc::free(self.buf as *mut std::ffi::c_void);
+        }
+    }
+}
